@@ -10,12 +10,7 @@ The attractive part is treated in mean field via the random phase
 approximation.  The code also allows calculation of the local
 compressibility profile, the adsorption and the surface tension.
 Checking capability includes comparison with the pressure sum rule and
-the Gibbs adsorption theorem. Nigel Wilding. March 2018.
-
-Use of this code should acknowledge the author who takes no
-liabilities for errors or omissions should the code be used in a
-research context: it is your responsibility to satisfy yourself
-regarding its correctness.
+the Gibbs adsorption theorem. Nigel Wildin, March 2018.
 
 More details of the implementation can be found in the notes files
 "planar.pdf".
