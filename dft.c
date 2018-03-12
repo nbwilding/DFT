@@ -1,11 +1,17 @@
 /* DFT code. Copyright Nigel Wilding Nigel.Wilding@bristol.ac.uk
 
-This code uses Classical Density Functional Theory to find the density profile of a fluid at a planar wall for a prescribed bulk density.
-The fluid potential is written as the sum of a hard part and a Lennard-Jones-like attractive part with truncated interactions. The hard part is 
-treated by Rosenfeld's functional measure theory with a choice of either the original form, or the White Bear version 
-(See Roth J. Phys. Condensed Matter, 22, 063102 (2010) for more details)  The attractive part is treated in mean field via the random phase approximation. 
-The code also allows calculation of the local compessibility profile, the adsorption  and the surface tension. 
-Checking capability includes comparison with the pressure sum rule and the Gibbs adsoprtion theorem. NBW September 2017 */
+This code uses Classical Density Functional Theory to find the density
+profile of a fluid at a planar wall for a prescribed bulk density.
+The fluid potential is written as the sum of a hard part and a
+Lennard-Jones-like attractive part with truncated interactions. The
+hard part is treated by Rosenfeld's functional measure theory with a
+choice of either the original form, or the White Bear version (See
+Roth J. Phys. Condensed Matter, 22, 063102 (2010) for more details)
+The attractive part is treated in mean field via the random phase
+approximation.  The code also allows calculation of the local
+compessibility profile, the adsorption and the surface tension.
+Checking capability includes comparison with the pressure sum rule and
+the Gibbs adsoprtion theorem. NBW September 2017 */
  
 #include <math.h>
 #include <stdio.h>
@@ -17,15 +23,15 @@ Checking capability includes comparison with the pressure sum rule and the Gibbs
 
 #define PI 3.14159265359
 #define PI_4 12.5663706144
-#define N 10000  //Number of grid points
+#define N 15000  //Number of grid points
 #define BARRIER 500 //Height of hard wall potential
 #define R 0.5  // Particle diameter sigma=1.  sets relationship between rho and eta 
 #define LJCUT 2.5  //Truncation radius for the Lennard-Jones potentials
-#define dz 0.005   //Grid spacing
+#define dz 0.0025   //Grid spacing
 #define epsilon 1.0 // Sets the unit of energy
 #define drho 0.00001 // Used for numerical compressibility derivative 
 #define TOL 1e-15  //Tolerance on convergence of density distribution
-#define MAXITER 40000  //Maximum number of iterations
+#define MAXITER 80000  //Maximum number of iterations
 
 //#define WHITEBEAR  //Switch to use WHite Bear Functional
 #define ROSENFELD //Switch to use Rosenfeld Functional
@@ -294,9 +300,9 @@ for(i=0;i<iend;i++) {z=(i-NiW)*dz; if(rho[i]>1e-8) fprintf(fpout,"A %f %12.10f %
 #endif
 
 #ifdef LR
-printf("Sum rule pressure: %f\n",sumrule());fprintf(fpout,"Sum rule pressure: %f\n",sumrule());
+printf("Sum rule pressure: %f (%f)\n",sumrule(),p);fprintf(fpout,"Sum rule pressure: %f (%f)\n",sumrule(),p);
 #else
-printf("Hard wall k_BT*Contact density = %f \n",T*rho[NiW]);fprintf(fpout,"Hard wall k_BT*Contact density = %f \n",T*rho[NiW]);
+printf("Hard wall k_BT*Contact density = %f (%10.8f)\n",T*rho[NiW],fabs(T*rho[NiW]-p));fprintf(fpout,"Hard wall k_BT*Contact density = %f (%10.8f)\n",T*rho[NiW],fabs(T*rho[NiW]-p));
 #endif
 
   	  
@@ -385,6 +391,26 @@ for(i=0;i<=NiR;i++) // The heaviside function is unity when it's argument is zer
 	   
   }
 
+//The weight functions have discontinities so use the extended closed formula from Numerical Recipes (eq 4.1.14).
+
+  w0[NiR]*=3./8;   w0[NiR-1]*=7./6;    w0[NiR-2]*=23./24;
+  w1[NiR]*=3./8;   w1[NiR-1]*=7./6;    w1[NiR-2]*=23./24;
+  w1v[NiR]*=3./8;  w1v[NiR-1]*=7./6;   w1v[NiR-2]*=23./24;
+  w1vn[NiR]*=3./8; w1vn[NiR-1]*=7./6;  w1vn[NiR-2]*=23./24;
+  w2[NiR]*=3./8;   w2[NiR-1]*=7./6;    w2[NiR-2]*=23./24;
+  w2v[NiR]*=3./8;  w2v[NiR-1]*=7./6;   w2v[NiR-2]*=23./24;
+  w2vn[NiR]*=3./8; w2vn[NiR-1]*=7./6;  w2vn[NiR-2]*=23./24;
+  w3[NiR]*=3./8;   w3[NiR-1]*=7./6;    w3[NiR-2]*=23./24;
+
+  w0[N-NiR]*=3./8;   w0[N-NiR+1]*=7./6;    w0[N-NiR+2]*=23./24;
+  w1[N-NiR]*=3./8;   w1[N-NiR+1]*=7./6;    w1[N-NiR+2]*=23./24;
+  w1v[N-NiR]*=3./8;  w1v[N-NiR+1]*=7./6;   w1v[N-NiR+2]*=23./24;
+  w1vn[N-NiR]*=3./8; w1vn[N-NiR+1]*=7./6;  w1vn[N-NiR+2]*=23./24;
+  w2[N-NiR]*=3./8;   w2[N-NiR+1]*=7./6;    w2[N-NiR+2]*=23./24;
+  w2v[N-NiR]*=3./8;  w2v[N-NiR+1]*=7./6;   w2v[N-NiR+2]*=23./24;
+  w2vn[N-NiR]*=3./8; w2vn[N-NiR+1]*=7./6;  w2vn[N-NiR+2]*=23./24;
+  w3[N-NiR]*=3./8;   w3[N-NiR+1]*=7./6;    w3[N-NiR+2]*=23./24;
+  
 #ifdef WHITEBEAR // This stops n3 becomng zero which blows up weighted densities
 w3[NiR] = 1e-6; 
 w3[N-NiR] = 1e-6;
@@ -408,58 +434,15 @@ void rs_convl(const double *input, const double *response, double *output, int H
   double this,next,term;
   double store[N];
 
-  if(HALFWIDTH==NiR) //The weight functions have discontinities so use the extended closed formula from Numerical Recipes (eq 4.1.14).
-  {	  
+ 
   	  for(i=0;i<N;i++)
   	  {
-  	  	  k=0; 
-  	  	  output[i]=0;
-  	  	  nterms=2*HALFWIDTH+1;
-  	  	  if(i<HALFWIDTH) nterms-=HALFWIDTH-i;
+  	  	  output[i]=0.0;
   	  	  for(j=i-HALFWIDTH;j<=i+HALFWIDTH;j++)
   	  	  {
-  	  	  	  if(j>=0 && j<N-1)
-  	  	  	  {
-  	  	  	  	  term= input[j] * response[MOD(i-j, N)];
-  	  	  	  	  store[k++]=term;              
-  	  	  	  }
-  	  	  }
-  	  	  store[0]*=3./8; store[1]*=7./6; store[2]*=23./24;
-  	  	  store[nterms-1]*=3./8; store[nterms-2]*=7./6; store[nterms-3]*=23./24; 
-  	  	  for(k=0;k<nterms;k++) output[i]+=store[k];
-  	  }
-  	  
-  }
-  else
-   {
-     //This seems to work better for the smoother LJ convolution
-  	  for(i=0;i<N;i++)
-  	  {
-  	  	  output[i]=0;   
-  	  	  if(i-HALFWIDTH>=0) this=input[i-HALFWIDTH]*response[MOD(HALFWIDTH, N)];
-  	  	  for(j=i-HALFWIDTH;j<i+HALFWIDTH;j++)
-  	  	  {
-  	  	  	  if(j>=0 && j<N-1)
-  	  	  	  {
-  	  	  	  	  next=   input[j+1] * response[MOD(i-j-1, N)];              
-  	  	  	  	  output[i]+=(this+next)/2.;
-  	  	  	  	  this=next;
-  	  	  	  }
+  	  	  	  if(j>=0 && j<N) output[i]+= input[j] * response[MOD(i-j, N)];
   	  	  }
   	  }
-  }
- 
- /* 
-   //Rectangular rule.  This is a simpler but less accurate alternative - not used
-  for(i=0;i<N;i++)
-  {
-   output[i]=0;
-   for(j=i-HALFWIDTH;j<i+HALFWIDTH;j++)  
-   if(j>=0 && j<N)  output[i] += input[j] * response[MOD(i-j, N)];
-
-  }
-*/
- 
  
 } //}}}
 
