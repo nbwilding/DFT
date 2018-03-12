@@ -1,33 +1,16 @@
+This code uses Classical Density Functional Theory to find the density profile of a fluid at a planar wall for a prescribed bulk density. The fluid potential is written as the sum of a hard part and a Lennard-Jones-like attractive part with truncated interactions. The hard part is treated by Rosenfeld's functional measure theory with a choice of either the original form, or the White Bear version (See R. Roth, J. Phys. Condensed Matter, 22, 063102 (2010) for more details). The attractive part is treated in mean field via the random phase approximation.  The code also allows calculation of the local compressibility profile, the adsorption and the surface tension. Checking capability includes comparison with the pressure sum rule and the Gibbs adsorption theorem. Nigel Wilding, March 2018.
 
-This code uses Classical Density Functional Theory to find the density
-profile of a fluid at a planar wall for a prescribed bulk density.
-The fluid potential is written as the sum of a hard part and a
-Lennard-Jones-like attractive part with truncated interactions. The
-hard part is treated by Rosenfeld's functional measure theory with a
-choice of either the original form, or the White Bear version (See
-Roth J. Phys. Condensed Matter, 22, 063102 (2010) for more details)
-The attractive part is treated in mean field via the random phase
-approximation.  The code also allows calculation of the local
-compressibility profile, the adsorption and the surface tension.
-Checking capability includes comparison with the pressure sum rule and
-the Gibbs adsorption theorem. Nigel Wildin, March 2018.
-
-More details of the implementation can be found in the notes files
-"planar.pdf".
+More details of the implementation can be found in the notes files "planar.pdf".
 
 Example usage.
 
 1. Lennard-Jones fluid at some temperature T, near an attractive wall.
 
-To calculate the density profile for Lennard-Jones particles at
-temperature T=1.022566 and bulk density density 0.597846 (which
-corresponds to the liquid density at liquid-vapor coexistence), near 
-an attractive wall having well depth \epsilon_w=1.0, run with
+To calculate the density profile for Lennard-Jones particles at temperature T=1.022566 and bulk density density 0.597846 (which corresponds to the liquid density at liquid-vapor coexistence), near an attractive wall having well depth \epsilon_w=1.0, run with
 
 DFT 1.022566 0.15 1.0 0.597846 ew1.0
 
-2. To calculate the density profile of hard spheres at a hard wall at
-bulk density 0.306665, first comment out #define LJ and #define LR and recompile. Then run with
+2. To calculate the density profile of hard spheres at a hard wall at bulk density 0.304665, first comment out #define LJ and #define LR and recompile. Then run with
 
 DFT 1. 0.15 0.304665 tesths
 
