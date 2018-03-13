@@ -23,22 +23,22 @@ the Gibbs adsoprtion theorem. NBW September 2017 */
 
 #define PI 3.14159265359
 #define PI_4 12.5663706144
-#define N 15000  //Number of grid points
+#define N 10000  //Number of grid points
 #define BARRIER 500 //Height of hard wall potential
 #define R 0.5  // Particle diameter sigma=1.  sets relationship between rho and eta 
 #define LJCUT 2.5  //Truncation radius for the Lennard-Jones potentials
-#define dz 0.0025   //Grid spacing
+#define dz 0.005   //Grid spacing
 #define epsilon 1.0 // Sets the unit of energy
 #define drho 0.00001 // Used for numerical compressibility derivative 
 #define TOL 1e-15  //Tolerance on convergence of density distribution
 #define MAXITER 80000  //Maximum number of iterations
 
-//#define WHITEBEAR  //Switch to use WHite Bear Functional
+//#define WHITEBEAR  //Switch to use White Bear Functional
 #define ROSENFELD //Switch to use Rosenfeld Functional
 //#define SHIFTEDWALL  //This will allow use of a 9-3 wall potential which is shifted so that its minimum is at the hard wall
-//#define MUDIFF // This calculates two derivatives with respect to mu: the compressibility d\rho(z)/d\mu and the gibbs adsorption: -\d\gamma/\mu
+#define MUDIFF // This calculates two derivatives with respect to mu: the compressibility d\rho(z)/d\mu and the gibbs adsorption: -\d\gamma/\mu
 
-//#define DIAG //Uncomment this line to get diagnostic information
+//#define DIAG //Uncomment this line to get diagnostic information written to files in a separate directory "Diag"
 #define LJ  //Turns on truncated Lennard-Jones-like fluid-fluid interactions
 #define LR //Turns on the 9-3 wall-fluid potential
 
@@ -77,8 +77,14 @@ int main(int argc,char *argv[])
 {
   int i,j, converged = 0;
   double diff,dpz;
-	
+
 //{{{ Read in parameters
+#ifdef WHITEBEAR
+#ifdef ROSENFELD
+printf("\nChoose EITHER WHITEBEAR or ROSENFELD DFT\n");
+exit(0);
+#endif
+#endif
 #ifdef LR
 if(argc!=6) 
    {
@@ -194,7 +200,7 @@ if(isweep>0)
 #endif
 
 #ifdef LJ
-//Form the attractive contribution. 
+//Form the attractive contribution
 for(i=0;i<N;i++) planepot[i]=0;
 for(i=0;i<N;i++)
   {
@@ -391,7 +397,7 @@ for(i=0;i<=NiR;i++) // The heaviside function is unity when it's argument is zer
 	   
   }
 
-//The weight functions have discontinities so use the extended closed formula from Numerical Recipes (eq 4.1.14).
+// Use the extended closed formula from Numerical Recipes (eq 4.1.14).
 
   w0[NiR]*=3./8;   w0[NiR-1]*=7./6;    w0[NiR-2]*=23./24;
   w1[NiR]*=3./8;   w1[NiR-1]*=7./6;    w1[NiR-2]*=23./24;
@@ -434,7 +440,8 @@ void rs_convl(const double *input, const double *response, double *output, int H
   double this,next,term;
   double store[N];
 
- 
+   if(HALFWIDTH==NiR)
+   {
   	  for(i=0;i<N;i++)
   	  {
   	  	  output[i]=0.0;
@@ -443,6 +450,26 @@ void rs_convl(const double *input, const double *response, double *output, int H
   	  	  	  if(j>=0 && j<N) output[i]+= input[j] * response[MOD(i-j, N)];
   	  	  }
   	  }
+  	  
+   }  
+  	    else
+   {
+     //Use a trapezoidal for the LJ convolution
+          for(i=0;i<N;i++)
+          {
+                  output[i]=0;   
+                  if(i-HALFWIDTH>=0) this=input[i-HALFWIDTH]*response[MOD(HALFWIDTH, N)];
+                  for(j=i-HALFWIDTH;j<i+HALFWIDTH;j++)
+                  {
+                          if(j>=0 && j<N-1)
+                          {
+                                  next=   input[j+1] * response[MOD(i-j-1, N)];              
+                                  output[i]+=(this+next)/2.;
+                                  this=next;
+                          }
+                  }
+          }
+  }
  
 } //}}}
 
