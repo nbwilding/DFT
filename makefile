@@ -2,7 +2,6 @@
 # OPTIONS
 
 NAME     = DFT
-#INCLUDES = -I/home/wilding/Dropbox/DFT/Code
 INCLUDES = -I.
 OUT      = \".\"
 IN       = \".\"
