@@ -29,7 +29,7 @@ the Gibbs adsoprtion theorem. NBW September 2017 */
 #define LJCUT 2.5  //Truncation radius for the Lennard-Jones potentials
 #define dz 0.005   //Grid spacing
 #define epsilon 1.0 // Sets the unit of energy
-#define drho 0.00001 // Used for numerical compressibility derivative 
+#define drho 0.0000001 // Used for numerical compressibility derivative 
 #define TOL 1e-15  //Tolerance on convergence of density distribution
 #define MAXITER 80000  //Maximum number of iterations
 
