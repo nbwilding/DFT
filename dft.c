@@ -161,7 +161,11 @@ printf("  dz=%f\n  N=%i\n  System Size(N*dz) =%4.2f\n  NiR=%i\n  NiW=%i\n  mixin
 fprintf(fpout,"dz=%f\nN=%i\nSystem size=%4.2f\nNiR=%i\nNiW=%i\nmixing (alpha)=%4.2f\nNGFREQ=%i\nTolerance=%lg\n",dz,N,dz*N,NiR,NiW,alpha,NGFREQ,TOL);
 //}}}
 
-//{{{ Open diagnostic files. These write values of various functions to files in a sub directory "Diag" which the user should create
+//{{{ Open diagnostic files. 
+
+/* These write values of various functions to files in a sub directory "Diag" which the user should create. 
+   Note these files get large so only run for a small number of iterations
+*/
 
 #ifdef DIAG
 printf("Opening diagnostic files\n");
