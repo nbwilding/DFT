@@ -10,7 +10,9 @@ Roth J. Phys. Condensed Matter, 22, 063102 (2010) for more details)
 The attractive part is treated in mean field.  The code also allows calculation of the local
 compessibility profile, the adsorption and the surface tension.
 Checking capability includes comparison with the pressure sum rule and
-the Gibbs adsoprtion theorem. NBW March 2018 */
+the Gibbs adsoprtion theorem. NBW March 2018
+
+*/
  
 #include <math.h>
 #include <stdio.h>
@@ -31,7 +33,7 @@ the Gibbs adsoprtion theorem. NBW March 2018 */
 #define drho 0.0000001     // Density step size for calculating derivatives w.r.t. mu 
 #define TOL 1e-12          // Tolerance on convergence of density distribution
 #define MAXITER 800000     // Maximum number of iterations
-#define NGFREQ 1000        // Ratio of Picard to Ng algorithm updates. Can be set as low as 3, but if in doubt set to 1000
+#define NGFREQ 3           // Ratio of Picard to Ng algorithm updates. Can be set as low as 3, but if in doubt set to 1000
 //#define WHITEBEAR        // Switch to use White Bear Functional
 #define ROSENFELD          // Switch to use Rosenfeld Functional
 #define LJ                 // Turns on truncated Lennard-Jones-like fluid-fluid interactions
@@ -39,12 +41,14 @@ the Gibbs adsoprtion theorem. NBW March 2018 */
 //#define MUDIFF           // Uncomment to calculate derivatives with respect to mu: the compressibility d\rho(z)/d\mu and the gibbs adsorption: -\d\gamma/\mu
 //#define SHIFTEDWALL      // Use a 9-3 wall potential which is shifted so that its minimum is at the hard wall
 //#define DIAG             // Uncomment this line to get diagnostic information written to files in a separate directory "Diag"
+//#define READRHO          // Uncomment this line to read in an existing density profile as a starting guess
 
 /* Function definitions */
 
-void setVext(), setphiatt(), maken0(), initrho(), setwhts();
+void setVext(), setphiatt(), initrho(), setwhts();
 void make_dn0(), make_dn1(), make_dn2(), make_dn3(), make_dn1v(), make_dn2v();
 void write_rho(), rs_convl(), update();
+
 double calcplanepot(double), omega(int);
 double pressure(), chempot(), sumrule(), adsorption();
 
@@ -56,8 +60,8 @@ double w0[N], w1[N], w2[N], w3[N], w1v[N], w2v[N], w1vn[N], w2vn[N];
 double n0[N], n1[N], n2[N], n3[N], n1v[N], n2v[N];
 double dn0[N], dn1[N], dn2[N], dn3[N], dn1v[N], dn2v[N];
 double c0[N], c1[N], c2[N], c3[N], c1v[N], c2v[N], dcf[N];
-double phiatt[N],cphiatt[N];
-double phi[N],phiid[N],planepot[N];
+double phiatt[N], cphiatt[N];
+double phi[N], phiid[N], planepot[N];
 
 //Other global variables
 
@@ -65,17 +69,14 @@ double mu,new_mu,dmu,alpha,z,rhob,etab,ew,Rsqr;
 double p,old_gamma,new_gamma;
 double T,invT,rmin,dev;
 
-int isign=1,iter=1, isweep, iend;
+int iter=1, isweep, iend;
 int NiR=R/dz;           // Number of grid points within particle radius
 int NiW=R/dz;           // Number of grid points within wall
 int NiRCUT=LJCUT/dz;    // Number of grid points within LJ cutoff
-int readrho=0;          // Read in an existing profile from 'rholive' to start the iteration
 
 // Files. Mainly used for diagnostic output
 char rholive[120],runcode[120];
 FILE *fpout, *fpVext, *fprholive, *fpwdens, *fpdirect, *fpdiag, *fpwhts, *fpfdivs, *fprho, *fprhonew, *fpdcf, *fptest, *fprhostart;
-
-
 
 int main(int argc,char *argv[])
 {
@@ -124,7 +125,7 @@ invT = 1.0/T;
 Rsqr = R*R;
 etab = rhob*PI/6.;
  
-//{{{ Messages about run
+//{{{ Messages about run.  Note "comments" of this form: //{{{  arise from the folding capabilities of some editors. I use jedit.
 
 printf("\nDFT for a fluid in planar geometry: NBW 2018\n");
 printf("\nState parameters:\n  rho_b=%12.10f\n  eta_b=%12.10f\n  mu=%12.10f\n  Pressure=%12.10f\n  Temperature=%10.8f\n  Inverse Temperature=%f\n\n",rhob,etab,mu,p,T,invT);
@@ -137,15 +138,17 @@ printf("Model parameters:\n");
 #ifdef WHITEBEAR
   printf("  White Bear Functional\n");fprintf(fpout,"White Bear Functional\n");
 #endif
+
 #ifdef LJ
  printf("  LJ system\n"); fprintf(fpout,"LJ system\n");
 #else
   printf("  HS system\n"); fprintf(fpout,"HS system\n");
 #endif
+
 #ifdef LR
- printf("  Wall-fluid potential switched ON: e_w=%lg \n",ew); fprintf(fpout,"Wall-fluid potential switched ON: e_w=%lg \n",ew);
+  printf("  Wall-fluid potential switched ON: e_w=%lg \n",ew); fprintf(fpout,"Wall-fluid potential switched ON: e_w=%lg \n",ew);
 #else 
- printf("  Hard wall potential\n");fprintf(fpout,"Hard wall potential\n");
+  printf("  Hard wall potential\n");fprintf(fpout,"Hard wall potential\n");
 #endif
 
 #ifdef MUDIFF
@@ -158,11 +161,11 @@ printf("  dz=%f\n  N=%i\n  System Size(N*dz) =%4.2f\n  NiR=%i\n  NiW=%i\n  mixin
 fprintf(fpout,"dz=%f\nN=%i\nSystem size=%4.2f\nNiR=%i\nNiW=%i\nmixing (alpha)=%4.2f\nNGFREQ=%i\nTolerance=%lg\n",dz,N,dz*N,NiR,NiW,alpha,NGFREQ,TOL);
 //}}}
 
-//{{{ Open diagnostic files
+//{{{ Open diagnostic files. These write values of various functions to files in a sub directory "Diag" which the user should create
 
 #ifdef DIAG
 printf("Opening diagnostic files\n");
-fpwdens = fopen("Diag/wdens","w"); if(fpwdens == NULL) {printf("Could not open diagnostic directory\n");exit(0);}
+fpwdens = fopen("Diag/wdens","w"); if(fpwdens == NULL) {printf("Could not open diagnostic directory\n Pease create a subdirectory called 'Diag' ");exit(0);}
 fpVext = fopen("Diag/Vext","w");
 fpwhts = fopen("Diag/weights","w");
 fpdirect = fopen("Diag/direct","w");
@@ -252,13 +255,13 @@ rs_convl(dn2v,w2vn,c2v,NiR);
 for(i=0;i<N;i++) dcf[i] = -( c0[i] + c1[i] + c2[i] + c3[i] + c1v[i] + c2v[i]);
 
 #ifdef LJ
-//Form the attractive contribution. 
+//Form the attractive contribution via a convolution (see notes file)
 rs_convl(rho,planepot,cphiatt,NiRCUT);
 #endif
 
 update();   // Call the Picard-Ng update                                                                           
 
-if(dev<TOL) converged=1;
+if(dev<TOL) converged = 1;
 
 if(iter%50==0) {printf("Iteration %5i Deviation= %10.8lg\n",iter++,dev);write_rho();}
 
@@ -284,12 +287,12 @@ else printf("Failed to converge after %i iterations\n",MAXITER);
 #ifdef MUDIFF
 if(isweep==0) {
 	old_gamma = omega(1);
-	printf("gamma1= %12.10f\n",old_gamma);
+	printf("gamma_1= %12.10f\n",old_gamma);
 }
 else 
 {
 	new_gamma = omega(1);
-        printf("gamma2= %12.10f\n",new_gamma);
+    printf("gamma_2= %12.10f\n",new_gamma);
 }
 }
 printf("-d(gamma)/dmu= %f\nadsorption= %f\n",-(new_gamma-old_gamma)/dmu,adsorption());
@@ -365,23 +368,16 @@ void initrho()  //set the density initially to be the bulk density and write it 
 {
   int i;
   float dummy;
-if(readrho==1)
-{
+#ifdef READRHO
   printf("Reading in starting rho(z) from rholive\n");
   fprhostart=fopen("rholive","r");
-  for(i=0;i<N;i++) 
-     {
-  	  fscanf(fprhostart,"%f %lg \n",&dummy,&rho[i]); 
-//      printf("%f %lg\n",dummy,rho[i]);
-  	 } 
+  for(i=0;i<N;i++) fscanf(fprhostart,"%f %lg \n",&dummy,&rho[i]); 
   fclose(fprhostart);
-}
-else
- {
+#else
   for(i=0;i<N;i++)  rho[i]=exp(-Vext[i]);
-  for(i=0;i<N;i++) if(Vext[i]<10) rho[i]=rhob;
- }
-   write_rho(); 
+  for(i=0;i<N;i++)  if(Vext[i]<10) rho[i]=rhob;
+#endif
+  write_rho(); 
 } //}}}
 
 //{{{ setwhts
@@ -479,7 +475,7 @@ void rs_convl(const double *input, const double *response, double *output, int H
    }  
   	    else
    {
-     //Use a trapezoidal for the LJ convolution
+     //Use a trapezoidal for the LJ convolution which seems to work better
           for(i=0;i<N;i++)
           {
                   output[i]=0;   
@@ -602,7 +598,7 @@ double pressure()
 #endif
 
 #ifdef LJ
-        p+=-2*PI*rhob*rhob*1.171861897*epsilon;
+        p+=-2*PI*rhob*rhob*1.171861897*epsilon;  //Van der Waals contribution
 #endif
 
 return(p);
@@ -700,6 +696,7 @@ int i,end;
 double a=0.0;
 
 for (i=0;i<iend;i++) a+=rho[i]+rho[i+1]-2*rhob;
+
 return (dz*a/2.);
 } //}}}
 
