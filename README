@@ -1,5 +1,4 @@
-This C code uses Classical Density Functional Theory to find the density profile of a fluid at a planar wall for a prescribed bulk density. The fluid potential is written as the sum of a hard part and a Lennard-Jones-like attractive part with truncated  interactions. The hard part is treated by Rosenfeld's functional measure theory with a choice of either the original form, or 
-the White Bear version (See R. Roth, J. Phys. Condensed Matter, 22, 063102 (2010) for more details). The attractive part is 
+This C code uses Classical Density Functional Theory to find the density profile of a fluid at a planar wall for a prescribed bulk density. The fluid potential is written as the sum of a hard part and a Lennard-Jones-like attractive part with truncated  interactions. The hard part is treated by Rosenfeld's functional measure theory with a choice of either the original form, or the White Bear version (See R. Roth, J. Phys. Condensed Matter, 22, 063102 (2010) for more details). The attractive part is 
 treated in a simple mean fashion.  The code also allows calculation of the local compressibility profile, the adsorption and 
 he surface tension. Checking capability includes comparison with the pressure sum rule and the Gibbs adsorption theorem.
 Nigel Wilding, March 2018.
