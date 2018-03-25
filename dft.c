@@ -33,8 +33,8 @@ the Gibbs adsoprtion theorem. NBW March 2018
 #define TOL 1e-12          // Tolerance on convergence of density distribution
 #define MAXITER 800000     // Maximum number of iterations
 #define NGFREQ 3           // Ratio of Picard to Ng algorithm updates. Can be set as low as 3, but if in doubt set to 1000
-#define WHITEBEAR        // Switch to use White Bear Functional
-//#define ROSENFELD          // Switch to use Rosenfeld Functional
+//#define WHITEBEAR        // Switch to use White Bear Functional
+#define ROSENFELD          // Switch to use Rosenfeld Functional
 #define LJ                 // Turns on truncated Lennard-Jones-like fluid-fluid interactions
 #define LR                 // Turns on the 9-3 wall-fluid potential
 #define MUDIFF           // Uncomment to calculate derivatives with respect to mu: the compressibility d\rho(z)/d\mu and the gibbs adsorption: -\d\gamma/\mu
