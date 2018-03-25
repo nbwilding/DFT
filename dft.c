@@ -18,13 +18,12 @@ the Gibbs adsoprtion theorem. NBW March 2018
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <time.h>
 
 #define MOD(n, N) ((n<0)? N+n : n)
 
 #define PI 3.14159265359
 #define PI_4 12.5663706144
-#define N 15000            // Total number of grid points
+#define N 10000            // Total number of grid points
 #define BARRIER 500        // Height of hard wall potential
 #define R 0.5              // Particle diameter sigma=1.  sets relationship between rho and eta 
 #define LJCUT 2.5          // Truncation radius for the Lennard-Jones potentials
@@ -34,11 +33,11 @@ the Gibbs adsoprtion theorem. NBW March 2018
 #define TOL 1e-12          // Tolerance on convergence of density distribution
 #define MAXITER 800000     // Maximum number of iterations
 #define NGFREQ 3           // Ratio of Picard to Ng algorithm updates. Can be set as low as 3, but if in doubt set to 1000
-//#define WHITEBEAR        // Switch to use White Bear Functional
-#define ROSENFELD          // Switch to use Rosenfeld Functional
+#define WHITEBEAR        // Switch to use White Bear Functional
+//#define ROSENFELD          // Switch to use Rosenfeld Functional
 #define LJ                 // Turns on truncated Lennard-Jones-like fluid-fluid interactions
 #define LR                 // Turns on the 9-3 wall-fluid potential
-//#define MUDIFF           // Uncomment to calculate derivatives with respect to mu: the compressibility d\rho(z)/d\mu and the gibbs adsorption: -\d\gamma/\mu
+#define MUDIFF           // Uncomment to calculate derivatives with respect to mu: the compressibility d\rho(z)/d\mu and the gibbs adsorption: -\d\gamma/\mu
 //#define SHIFTEDWALL      // Use a 9-3 wall potential which is shifted so that its minimum is at the hard wall
 //#define DIAG             // Uncomment this line to get diagnostic information written to files in a separate directory "Diag"
 //#define READRHO          // Uncomment this line to read in an existing density profile as a starting guess
@@ -125,11 +124,11 @@ invT = 1.0/T;
 Rsqr = R*R;
 etab = rhob*PI/6.;
  
-//{{{ Messages about run.  Note "comments" of this form: //{{{  arise from the folding capabilities of some editors. I use jedit.
+//{{{ Messages about run.  Note "comments" of this form arise from the folding capabilities of some editors. I use jedit.
 
 printf("\nDFT for a fluid in planar geometry: NBW 2018\n");
-printf("\nState parameters:\n  rho_b=%12.10f\n  eta_b=%12.10f\n  mu=%12.10f\n  Pressure=%12.10f\n  Temperature=%10.8f\n  Inverse Temperature=%f\n\n",rhob,etab,mu,p,T,invT);
-fprintf(fpout,"rho_b=%12.10f\neta_b=%12.10f\nmu=%12.10f\nPressure=%12.10f\nTemperature=%10.8f\ninverse Temperature=%10.8f\n",rhob,etab,mu,p,T,invT);
+printf("\nState parameters:\n  rho_b= %12.10f\n  eta_b= %12.10f\n  mu= %12.10f\n  Pressure= %12.10f\n  Temperature= %10.8f\n  Inverse Temperature= %f\n\n",rhob,etab,mu,p,T,invT);
+fprintf(fpout,"rho_b= %12.10f\neta_b= %12.10f\nmu= %12.10f\nPressure= %12.10f\nTemperature= %10.8f\nInverse Temperature= %10.8f\n",rhob,etab,mu,p,T,invT);
 printf("Model parameters:\n"); 
 #ifdef ROSENFELD
   printf("  ROSENFELD Functional\n");fprintf(fpout,"ROSENFELD Functional\n");
@@ -146,7 +145,7 @@ printf("Model parameters:\n");
 #endif
 
 #ifdef LR
-  printf("  Wall-fluid potential switched ON: e_w=%lg \n",ew); fprintf(fpout,"Wall-fluid potential switched ON: e_w=%lg \n",ew);
+  printf("  Wall-fluid potential switched ON\n  e_w= %lg \n",ew); fprintf(fpout,"Wall-fluid potential switched ON\ne_w= %lg \n",ew);
 #else 
   printf("  Hard wall potential\n");fprintf(fpout,"Hard wall potential\n");
 #endif
@@ -155,10 +154,10 @@ printf("Model parameters:\n");
 printf("  Measuring mu derivatives for compressibility profile and Gibbs adsorption\n");fprintf(fpout,"Measuring mu derivatives for compressibility profile and Gibbs adsorption\n");
 #endif
 #ifdef DIAG
- printf("  Diagnostics switched on\n");
+ printf("  Diagnostic file output switched on\n");
 #endif
-printf("  dz=%f\n  N=%i\n  System Size(N*dz) =%4.2f\n  NiR=%i\n  NiW=%i\n  mixing (alpha)=%4.2f\n  NGFREQ=%i\n  Tolerance=%lg\n",dz,N,dz*N,NiR,NiW,alpha,NGFREQ,TOL);
-fprintf(fpout,"dz=%f\nN=%i\nSystem size=%4.2f\nNiR=%i\nNiW=%i\nmixing (alpha)=%4.2f\nNGFREQ=%i\nTolerance=%lg\n",dz,N,dz*N,NiR,NiW,alpha,NGFREQ,TOL);
+printf("  dz= %f\n  N= %i\n  System Size(N*dz)= %4.2f\n  NiR=%i\n  NiW=%i\n  mixing (alpha)=%4.2f\n  NGFREQ=%i\n  Tolerance=%lg\n",dz,N,dz*N,NiR,NiW,alpha,NGFREQ,TOL);
+fprintf(fpout,"dz= %f\nN= %i\nSystem size= %4.2f\nNiR= %i\nNiW= %i\nmixing (alpha)= %4.2f\nNGFREQ=%i\nTolerance=%lg\n",dz,N,dz*N,NiR,NiW,alpha,NGFREQ,TOL);
 //}}}
 
 //{{{ Open diagnostic files. 
@@ -168,7 +167,6 @@ fprintf(fpout,"dz=%f\nN=%i\nSystem size=%4.2f\nNiR=%i\nNiW=%i\nmixing (alpha)=%4
 */
 
 #ifdef DIAG
-printf("Opening diagnostic files\n");
 fpwdens = fopen("Diag/wdens","w"); if(fpwdens == NULL) {printf("Could not open diagnostic directory\n Pease create a subdirectory called 'Diag' ");exit(0);}
 fpVext = fopen("Diag/Vext","w");
 fpwhts = fopen("Diag/weights","w");
@@ -241,7 +239,13 @@ rs_convl(rho,w3,n3,NiR);
 rs_convl(rho,w2v,n2v,NiR);
 
 for(i=0;i<N;i++)  { n0[i]=n2[i]/(PI_4*Rsqr); n1[i]=n2[i]/(PI_4*R); n1v[i]=n2v[i]/(PI_4*R); } //Others are simple related to n2,n3,n2v
- 
+  
+#ifdef WHITEBEAR //When we have a long ranged wall, we need to make sure that n3 is non-zero or the functional derivatives blow up
+#ifdef LR
+   for(i=0;i<N;i++) if(n3[i]<TOL) n3[i]=1e-12;
+#endif 
+#endif	
+
 //Now get the terms in the direct correlation function
 
 make_dn0(); make_dn1(); make_dn2();
@@ -271,12 +275,13 @@ if(iter%50==0) {printf("Iteration %5i Deviation= %10.8lg\n",iter++,dev);write_rh
 
 //{{{ Write out diagnostics
 #ifdef DIAG
-for(i=0;i<N;i++)  fprintf(fpwdens,"%12.10f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,n0[i],n1[i],n2[i],n3[i],n1v[i],n2v[i]);
-for(i=0;i<N;i++)  fprintf(fpfdivs,"%f %f %f %f %f %f %f\n",i*dz,dn0[i],dn1[i],dn2[i],dn3[i],dn1v[i],dn2v[i]);
-for(i=0;i<N;i++)  fprintf(fpdirect," %f %f %f %f %f %f %f\n",i*dz,c0[i],c1[i],c2[i],c3[i],c1v[i],c2v[i]);
-for(i=0;i<N;i++)  fprintf(fpdcf," %f %f\n",i*dz,dcf[i]);
-for(i=0;i<N;i++)  fprintf(fprho," %f %f\n",i*dz,rho[i]);
-for(i=0;i<N;i++)  fprintf(fprhonew," %f %f %f %f\n",i*dz,rhonew[i],alpha*exp(invT*(mu-Vext[i])+dcf[i]),exp(invT*(mu-Vext[i])));
+for(i=0;i<N;i++)  fprintf(fpwdens,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,n0[i],n1[i],n2[i],n3[i],n1v[i],n2v[i]);
+for(i=0;i<N;i++)  fprintf(fpfdivs,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,dn0[i],dn1[i],dn2[i],dn3[i],dn1v[i],dn2v[i]);
+for(i=0;i<N;i++)  fprintf(fpdirect,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,c0[i],c1[i],c2[i],c3[i],c1v[i],c2v[i]);
+for(i=0;i<N;i++)  fprintf(fpdcf,"%f %12.10f\n",i*dz,dcf[i]);
+for(i=0;i<N;i++)  fprintf(fprho,"%f %12.10f\n",i*dz,rho[i]);
+for(i=0;i<N;i++)  fprintf(fprhonew,"%f %12.10f %12.10f %12.10f\n",i*dz,rhonew[i],alpha*exp(invT*(mu-Vext[i])+dcf[i]),exp(invT*(mu-Vext[i])));
+exit(0);  //Stops after first iteration to keep file sizes small. Remove this line to get data on all iterations
 #endif //}}}
 
 // Copy the new density profile to the old one.
@@ -308,7 +313,7 @@ printf("gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());fprintf(fp
 
 
 #ifdef LR
-printf("Sum rule pressure: %f (%f)\n",sumrule(),p);fprintf(fpout,"Sum rule pressure: %f (%f)\n",sumrule(),p);
+printf("Sum rule pressure: %10.8lg (%10.8lg)\n",sumrule(),p);fprintf(fpout,"Sum rule pressure: %10.8lg (%10.8lg)\n",sumrule(),p);
 #else
 printf("Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n",T*rho[NiW],fabs(T*rho[NiW]-p));fprintf(fpout,"Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n",T*rho[NiW],fabs(T*rho[NiW]-p));
 #endif
@@ -680,12 +685,12 @@ double omega(int mode)
          phi[i] += 0.5*rho[i]*cphiatt[i];  
 #endif
          phi[i] += mode*p;       
-         if(i>=NiR) phiid[i] = T*rho[i]*(log(rho[i])-1.0) + rho[i]*(Vext[i]-mu);  
+         if(i>=NiR) phiid[i] = T*rho[i]*(log(rho[i])-1.0) + rho[i]*(Vext[i]-mu);  //Due to convolution phi has contributions over a arger range than the ideal part
        }
 
     sumid=0.0;sumphi=0.0;
-    for (i=0;i<iend-1;i++) sumphi+=phi[i]+phi[i+1];        //Due to convolution phi needs to be integrated over a bigger range than the ideal part
-    for (i=NiR;i<iend-1;i++) sumid+=phiid[i]+phiid[i+1];
+    for (i=0;i<iend-1;i++) sumphi+=phi[i]+phi[i+1];        
+    for (i=0;i<iend-1;i++) sumid+=phiid[i]+phiid[i+1];
     
   return dz*(sumid+sumphi)/2.0;
 
