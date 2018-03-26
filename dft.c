@@ -23,7 +23,7 @@ the Gibbs adsoprtion theorem. NBW March 2018
 
 #define PI 3.14159265359
 #define PI_4 12.5663706144
-#define N 100000            // Total number of grid points
+#define N 10000            // Total number of grid points
 #define BARRIER 500        // Height of hard wall potential
 #define R 0.5              // Particle diameter sigma=1.  sets relationship between rho and eta 
 #define LJCUT 2.5          // Truncation radius for the Lennard-Jones potentials
