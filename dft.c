@@ -23,7 +23,7 @@ the Gibbs adsoprtion theorem. NBW March 2018
 
 #define PI 3.14159265359
 #define PI_4 12.5663706144
-#define N 10000            // Total number of grid points
+#define N 100000            // Total number of grid points
 #define BARRIER 500        // Height of hard wall potential
 #define R 0.5              // Particle diameter sigma=1.  sets relationship between rho and eta 
 #define LJCUT 2.5          // Truncation radius for the Lennard-Jones potentials
@@ -37,7 +37,7 @@ the Gibbs adsoprtion theorem. NBW March 2018
 #define ROSENFELD          // Switch to use Rosenfeld Functional
 #define LJ                 // Turns on truncated Lennard-Jones-like fluid-fluid interactions
 #define LR                 // Turns on the 9-3 wall-fluid potential
-#define MUDIFF           // Uncomment to calculate derivatives with respect to mu: the compressibility d\rho(z)/d\mu and the gibbs adsorption: -\d\gamma/\mu
+//#define MUDIFF           // Uncomment to calculate derivatives with respect to mu: the compressibility d\rho(z)/d\mu and the gibbs adsorption: -\d\gamma/\mu
 //#define SHIFTEDWALL      // Use a 9-3 wall potential which is shifted so that its minimum is at the hard wall
 //#define DIAG             // Uncomment this line to get diagnostic information written to files in a separate directory "Diag"
 //#define READRHO          // Uncomment this line to read in an existing density profile as a starting guess
@@ -222,6 +222,8 @@ for(i=0;i<N;i++)
       if(i>0) planepot[N-i] = planepot[i];
       }
   }
+planepot[NiRCUT]*=3./8;   planepot[NiRCUT-1]*=7./6;    planepot[NiRCUT-2]*=23./24; // Apply the extended quadrature
+planepot[N-NiRCUT]*=3./8; planepot[N-NiRCUT+1]*=7./6;  planepot[N-NiRCUT+2]*=23./24;
 #endif
 
 #ifdef LJ // We stop calculating before we get to the end of the grid to avoid it acting like a second wall
