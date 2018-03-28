@@ -23,7 +23,7 @@ the Gibbs adsoprtion theorem. NBW March 2018
 
 #define PI 3.14159265359
 #define PI_4 12.5663706144
-#define N 10000            // Total number of grid points
+#define N 50000            // Total number of grid points
 #define BARRIER 500        // Height of hard wall potential
 #define R 0.5              // Particle diameter sigma=1.  sets relationship between rho and eta 
 #define LJCUT 2.5          // Truncation radius for the Lennard-Jones potentials
@@ -222,7 +222,7 @@ for(i=0;i<N;i++)
       if(i>0) planepot[N-i] = planepot[i];
       }
   }
-planepot[NiRCUT]*=3./8;   planepot[NiRCUT-1]*=7./6;    planepot[NiRCUT-2]*=23./24; // Apply the extended quadrature
+planepot[NiRCUT]*=3./8;   planepot[NiRCUT-1]*=7./6;    planepot[NiRCUT-2]*=23./24; // Apply the extended quadrature Numerical Recipes Eq. (eq 4.1.14) to deal with the truncation
 planepot[N-NiRCUT]*=3./8; planepot[N-NiRCUT+1]*=7./6;  planepot[N-NiRCUT+2]*=23./24;
 #endif
 
@@ -366,7 +366,7 @@ if(zwall>0)
 	{
 		int i;
 	    fprholive=fopen("rholive","w");
-	    for(i=0;i<N;i++) fprintf(fprholive,"%f %f %lg\n",i*dz,rho[i],d[i]);
+	    for(i=0;i<N;i++) fprintf(fprholive,"%f %f %10.8f %lg\n",i*dz,rho[i],rho[i]/rhob,d[i]);
 	    fclose(fprholive);
     }
 
@@ -472,8 +472,6 @@ void rs_convl(const double *input, const double *response, double *output, int H
   double this,next,term;
   double store[N];
 
-   if(HALFWIDTH==NiR)
-   {
   	  for(i=0;i<N;i++)
   	  {
   	  	  output[i]=0.0;
@@ -483,25 +481,6 @@ void rs_convl(const double *input, const double *response, double *output, int H
   	  	  }
   	  }
   	  
-   }  
-  	    else
-   {
-     //Use a trapezoidal for the LJ convolution which seems to work better
-          for(i=0;i<N;i++)
-          {
-                  output[i]=0;   
-                  if(i-HALFWIDTH>=0) this=input[i-HALFWIDTH]*response[MOD(HALFWIDTH, N)];
-                  for(j=i-HALFWIDTH;j<i+HALFWIDTH;j++)
-                  {
-                          if(j>=0 && j<N-1)
-                          {
-                                  next=   input[j+1] * response[MOD(i-j-1, N)];              
-                                  output[i]+=(this+next)/2.;
-                                  this=next;
-                          }
-                  }
-          }
-  }
  
 } //}}}
 
