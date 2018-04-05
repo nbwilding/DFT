@@ -23,7 +23,7 @@ the Gibbs adsoprtion theorem. NBW March 2018
 
 #define PI 3.14159265359
 #define PI_4 12.5663706144
-#define N 50000            // Total number of grid points
+#define N 20000            // Total number of grid points
 #define BARRIER 500        // Height of hard wall potential
 #define R 0.5              // Particle diameter sigma=1.  sets relationship between rho and eta 
 #define LJCUT 2.5          // Truncation radius for the Lennard-Jones potentials
@@ -58,15 +58,17 @@ double g[N], g1[N], g2[N], d[N], d1[N], d2[N], d01[N], d02[N]; //Used by update 
 double w0[N], w1[N], w2[N], w3[N], w1v[N], w2v[N], w1vn[N], w2vn[N];
 double n0[N], n1[N], n2[N], n3[N], n1v[N], n2v[N];
 double dn0[N], dn1[N], dn2[N], dn3[N], dn1v[N], dn2v[N];
-double c0[N], c1[N], c2[N], c3[N], c1v[N], c2v[N], dcf[N];
+double cder1[N], cder2[N];  //Combined derivatives used to reduce number of necessary convolutions
+double c2[N], c3[N], c2v[N], dcf[N];
 double phiatt[N], cphiatt[N];
 double phi[N], phiid[N], planepot[N];
 
 //Other global variables
 
-double mu,new_mu,dmu,alpha,z,rhob,etab,ew,Rsqr;
+double mu,new_mu,dmu,alpha,z,rhob,etab,ew;
 double p,old_gamma,new_gamma;
 double T,invT,rmin,dev;
+double Pi4R2,Pi4R;
 
 int iter=1, isweep, iend;
 int NiR=R/dz;           // Number of grid points within particle radius
@@ -121,8 +123,9 @@ if(!strcmp(argv[4], "stderr")) *fpout=*stderr;
 mu = chempot(); //The user's choice of the bulk density sets the chemical potential and pressure.
 p = pressure();
 invT = 1.0/T;
-Rsqr = R*R;
-etab = rhob*PI/6.;
+Pi4R2 = PI_4 * R * R;  //Precalculated constants
+Pi4R  = PI_4 * R;
+etab  = rhob * PI/6.;
  
 //{{{ Messages about run.  Note "comments" of this form arise from the folding capabilities of some editors. I use jedit.
 
@@ -240,7 +243,7 @@ rs_convl(rho,w2,n2,NiR); //Get the weighted densities via convolution
 rs_convl(rho,w3,n3,NiR);
 rs_convl(rho,w2v,n2v,NiR);
 
-for(i=0;i<N;i++)  { n0[i]=n2[i]/(PI_4*Rsqr); n1[i]=n2[i]/(PI_4*R); n1v[i]=n2v[i]/(PI_4*R); } //Others are simple related to n2,n3,n2v
+for(i=0;i<N;i++)  { n0[i]=n2[i]/Pi4R2; n1[i]=n2[i]/Pi4R; n1v[i]=n2v[i]/Pi4R; } //Others are simple related to n2,n3,n2v
   
 #ifdef WHITEBEAR //When we have a long ranged wall, we need to make sure that n3 is non-zero or the functional derivatives blow up
 #ifdef LR
@@ -253,16 +256,18 @@ for(i=0;i<N;i++)  { n0[i]=n2[i]/(PI_4*Rsqr); n1[i]=n2[i]/(PI_4*R); n1v[i]=n2v[i]
 make_dn0(); make_dn1(); make_dn2();
 make_dn3(); make_dn1v(); make_dn2v();
 
-rs_convl(dn0,w0,c0,NiR);
-rs_convl(dn1,w1,c1,NiR);
-rs_convl(dn2,w2,c2,NiR);
+//Here we reduce the number of convolutions necessary by exploiting the relationships between w0, w1, w2, w1v, w2v (see notes)
+for(i=0;i<N;i++)
+{	
+cder1[i]=dn0[i]/Pi4R2 + dn1[i]/Pi4R + dn2[i];   //Combined derivatives
+cder2[i]=dn1v[i]/Pi4R + dn2v[i];
+}
+
+rs_convl(cder1,w2,c2,NiR);
+rs_convl(cder2,w2vn,c2v,NiR);
 rs_convl(dn3,w3,c3,NiR);
-rs_convl(dn1v,w1vn,c1v,NiR); //NB the vector weights are odd, so use the negative- see Roth 2010
-rs_convl(dn2v,w2vn,c2v,NiR);
 
-// Now form the direct correlation function (dcf)
-
-for(i=0;i<N;i++) dcf[i] = -( c0[i] + c1[i] + c2[i] + c3[i] + c1v[i] + c2v[i]);
+for(i=0;i<N;i++) dcf[i] = -( c2[i] + c2v[i] + c3[i] );
 
 #ifdef LJ
 //Form the attractive contribution via a convolution (see notes file)
