@@ -300,6 +300,7 @@ for(i=0;i<iend;i++) rho[i]=rhonew[i];  // Note we fix the 'bulk' density far fro
 if(converged==1) printf("Converged to within tolerance in %i iterations\n",iter);
 else printf("Failed to converge after %i iterations\n",MAXITER);
 
+fprintf(fpout,"--------------------------------------------------------------- \n\n");
 #ifdef MUDIFF
 if(isweep==0) {
 	old_gamma = omega(1);
@@ -312,10 +313,12 @@ else
 }
 }
 printf("-d(gamma)/dmu= %f\nadsorption= %f\n",-(new_gamma-old_gamma)/dmu,adsorption());
-for(i=0;i<iend;i++) {z=(i-NiW)*dz; if(rhokeep[i]>1e-8) fprintf(fpout,"A %f %12.10f %12.10f %12.10f %12.10f\n",z,rhokeep[i],rhokeep[i]/rhob,rhokeep[i]*PI/6,(rho[i]-rhokeep[i])/dmu);}
+fprintf(fpout,"      z         rho(z)     rho(z)/rhob         eta(z)         Chi(z)\n\n");
+for(i=0;i<iend;i++) {z=(i-NiW)*dz; if(rhokeep[i]>1e-8) fprintf(fpout,"A  %f  %12.10f  %12.10f  %12.10f  %12.10f\n",z,rhokeep[i],rhokeep[i]/rhob,rhokeep[i]*PI/6,(rho[i]-rhokeep[i])/dmu);}
 #else
-for(i=0;i<iend;i++) {z=(i-NiW)*dz; if(rho[i]>1e-8) fprintf(fpout,"B %f %12.10f %12.10f %12.10f %lg\n",z,rho[i],rho[i]/rhob,rho[i]*PI/6,d[i]);}
 printf("gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());fprintf(fpout,"gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());
+fprintf(fpout,"       z        rho(z)      rho(z)/rhob      eta(z)         d[z]         Phi(z) \n\n");
+for(i=0;i<iend;i++) {z=(i-NiW)*dz; if(rho[i]>1e-8) fprintf(fpout,"B  %f  %12.10f  %12.10f  %12.10f  %12.10lg  %12.10f\n",z,rho[i],rho[i]/rhob,rho[i]*PI/6,d[i],phi[i]+phiid[i]);}
 #endif
 
 
@@ -671,7 +674,7 @@ double omega(int mode)
          phi[i] += 0.5*rho[i]*cphiatt[i];  
 #endif
          phi[i] += mode*p;       
-         if(i>=NiR) phiid[i] = T*rho[i]*(log(rho[i])-1.0) + rho[i]*(Vext[i]-mu);  //Due to convolution phi has contributions over a arger range than the ideal part
+         if(i>=NiR && rho[i]>0) phiid[i] = T*rho[i]*(log(rho[i])-1.0) + rho[i]*(Vext[i]-mu);  //Due to convolution phi has contributions over a larger range than the ideal part
        }
 
     sumid=0.0;sumphi=0.0;
