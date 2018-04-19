@@ -297,7 +297,7 @@ for(i=0;i<iend;i++) rho[i]=rhonew[i];  // Note we fix the 'bulk' density far fro
 
 } //end of iteration loop
 
-if(converged==1) printf("Converged to within tolerance in %i iterations\n",iter);
+if(converged==1) printf("\nConverged to within tolerance in %i iterations\n",iter);
 else printf("Failed to converge after %i iterations\n",MAXITER);
 
 fprintf(fpout,"--------------------------------------------------------------- \n\n");
@@ -316,9 +316,10 @@ printf("-d(gamma)/dmu= %f\nadsorption= %f\n",-(new_gamma-old_gamma)/dmu,adsorpti
 fprintf(fpout,"      z         rho(z)     rho(z)/rhob         eta(z)         Chi(z)\n\n");
 for(i=0;i<iend;i++) {z=(i-NiW)*dz; if(rhokeep[i]>1e-8) fprintf(fpout,"A  %f  %12.10f  %12.10f  %12.10f  %12.10f\n",z,rhokeep[i],rhokeep[i]/rhob,rhokeep[i]*PI/6,(rho[i]-rhokeep[i])/dmu);}
 #else
-printf("gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());fprintf(fpout,"gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());
+omega(1);
 fprintf(fpout,"       z        rho(z)      rho(z)/rhob      eta(z)         d[z]         Phi(z) \n\n");
 for(i=0;i<iend;i++) {z=(i-NiW)*dz; if(rho[i]>1e-8) fprintf(fpout,"B  %f  %12.10f  %12.10f  %12.10f  %12.10lg  %12.10f\n",z,rho[i],rho[i]/rhob,rho[i]*PI/6,d[i],phi[i]+phiid[i]);}
+printf("gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());fprintf(fpout,"gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());
 #endif
 
 
