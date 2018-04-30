@@ -11,11 +11,15 @@ To calculate the density profile for Lennard-Jones particles at temperature T=1.
 
 DFT 1.022566 0.15 1.0 0.597846 ew1.0
 
+The last argument is the "runcode", ie. output appears in the file ew1.0.dat
+
 2. Hard spheres at a hard wall
 
 To calculate the density profile of hard spheres at a hard wall at bulk density 0.304665, first comment out #define LJ and #define LR and recompile. Then run with
 
 DFT 1. 0.1 0.304665 tesths
+
+Putput appears in the file tesths.dat
 
 
 
