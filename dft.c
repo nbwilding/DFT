@@ -21,8 +21,8 @@ the Gibbs adsoprtion theorem. NBW March 2018
 
 #define MOD(n, N) ((n<0)? N+n : n)
 
-#define PI 3.14159265359
-#define PI_4 12.5663706144
+#define PI 3.14159265358979
+#define PI_4 12.56637061435916
 #define N 20000            // Total number of grid points
 #define BARRIER 500        // Height of hard wall potential
 #define R 0.5              // Particle diameter sigma=1.  sets relationship between rho and eta 
@@ -314,11 +314,11 @@ else
 }
 printf("-d(gamma)/dmu= %f\nadsorption= %f\n",-(new_gamma-old_gamma)/dmu,adsorption());
 fprintf(fpout,"      z         rho(z)     rho(z)/rhob         eta(z)         Chi(z)\n\n");
-for(i=0;i<iend;i++) {z=(i-NiW)*dz; if(rhokeep[i]>1e-8) fprintf(fpout,"A  %f  %12.10f  %12.10f  %12.10f  %12.10f\n",z,rhokeep[i],rhokeep[i]/rhob,rhokeep[i]*PI/6,(rho[i]-rhokeep[i])/dmu);}
+for(i=0;i<iend;i++) {z=(i-NiW)*dz;  fprintf(fpout,"A  %f  %12.10f  %12.10f  %12.10f  %12.10f\n",z,rhokeep[i],rhokeep[i]/rhob,rhokeep[i]*PI/6,(rho[i]-rhokeep[i])/dmu);}
 #else
 omega(1);
 fprintf(fpout,"       z        rho(z)      rho(z)/rhob      eta(z)         d[z]         Phi(z) \n\n");
-for(i=0;i<iend;i++) {z=(i-NiW)*dz; if(rho[i]>1e-8) fprintf(fpout,"B  %f  %12.10f  %12.10f  %12.10f  %12.10lg  %12.10f\n",z,rho[i],rho[i]/rhob,rho[i]*PI/6,d[i],phi[i]+phiid[i]);}
+for(i=0;i<iend;i++) {z=(i-NiW)*dz; fprintf(fpout,"B  %f  %12.10lg  %12.10lg  %12.10lg  %12.10lg  %12.10lg\n",z,rho[i],rho[i]/rhob,rho[i]*PI/6,d[i],phi[i]+phiid[i]);}
 printf("gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());fprintf(fpout,"gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());
 #endif
 
@@ -375,7 +375,7 @@ if(zwall>0)
 	{
 		int i;
 	    fprholive=fopen("rholive","w");
-	    for(i=0;i<N;i++) fprintf(fprholive,"%f %f %10.8f %lg\n",i*dz,rho[i],rho[i]/rhob,d[i]);
+	    for(i=0;i<N;i++) fprintf(fprholive,"%f %12.10f %12.10f %lg\n",i*dz,rho[i],rho[i]/rhob,d[i]);
 	    fclose(fprholive);
     }
 
@@ -389,8 +389,8 @@ void initrho()  //set the density initially to be the bulk density and write it 
   int i;
   float dummy;
 #ifdef READRHO
-  printf("Reading in starting rho(z) from rholive\n");
-  fprhostart=fopen("rholive","r");
+  printf("Reading in starting rho(z) from rho_init\n");
+  fprhostart=fopen("rho_init","r");
   for(i=0;i<N;i++) fscanf(fprhostart,"%f %lg \n",&dummy,&rho[i]); 
   fclose(fprhostart);
 #else
@@ -744,13 +744,19 @@ if(iter>3)
    a2 = (ip0102 * ipn01 - ip0101 * ipn02) / norm; 
   }
 
-for(i=0;i<iend;i++) 
-  {
-    if(dev<0.01 && iter % NGFREQ==0) rhonew[i] = (1-a1-a2)*g[i] + a1*g1[i] + a2*g2[i]; //Only use Ng if first sufficiently converged by Picard
-      else rhonew[i]=(1-alpha)*rho[i] + alpha*g[i];
- 	  g2[i] = g1[i]; // Shuffle down
-      g1[i] = g[i];
-      d2[i] = d1[i];
-      d1[i] = d[i];
-   }
-} //}}}
+
+if(dev<1e-3 && iter % NGFREQ==0)
+    for(i=0;i<iend;i++)   rhonew[i] = (1-a1-a2)*g[i] + a1*g1[i] + a2*g2[i]; //Only use Ng if first sufficiently converged by Picard
+ else
+   for(i=0;i<iend;i++)  rhonew[i]=(1-alpha)*rho[i] + alpha*g[i];    
+
+   for(i=0;i<iend;i++)
+     {
+       g2[i] = g1[i]; 
+       g1[i] = g[i];
+       d2[i] = d1[i];
+       d1[i] = d[i];
+     }
+
+} 
+//}}}
