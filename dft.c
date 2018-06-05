@@ -35,12 +35,13 @@ the Gibbs adsoprtion theorem. NBW March 2018
 #define NGFREQ 3           // Ratio of Picard to Ng algorithm updates. Can be set as low as 3, but if in doubt set to 1000
 //#define WHITEBEAR        // Switch to use White Bear Functional
 #define ROSENFELD          // Switch to use Rosenfeld Functional
-#define LJ                 // Turns on truncated Lennard-Jones-like fluid-fluid interactions
-#define LR                 // Turns on the 9-3 wall-fluid potential
+//#define LJ                 // Turns on truncated Lennard-Jones-like fluid-fluid interactions
+//#define LR                 // Turns on the 9-3 wall-fluid potential
 //#define MUDIFF           // Uncomment to calculate derivatives with respect to mu: the compressibility d\rho(z)/d\mu and the gibbs adsorption: -\d\gamma/\mu
 //#define SHIFTEDWALL      // Use a 9-3 wall potential which is shifted so that its minimum is at the hard wall
 //#define DIAG             // Uncomment this line to get diagnostic information written to files in a separate directory "Diag"
 //#define READRHO          // Uncomment this line to read in an existing density profile as a starting guess
+#define SPHERICAL		   // Turns on spherical wall geometry
 
 /* Function definitions */
 
@@ -56,23 +57,27 @@ double pressure(), chempot(), sumrule(), adsorption();
 double rho[N], rhonew[N], rhokeep[N], Vext[N];
 double g[N], g1[N], g2[N], d[N], d1[N], d2[N], d01[N], d02[N]; //Used by update function
 double w0[N], w1[N], w2[N], w3[N], w1v[N], w2v[N], w1vn[N], w2vn[N];
-double n0[N], n1[N], n2[N], n3[N], n1v[N], n2v[N];
+double n0[N], n1[N], n2[N], n3[N], n1v[N], n2v[N], n2vdummy[N];
 double dn0[N], dn1[N], dn2[N], dn3[N], dn1v[N], dn2v[N];
 double cder1[N], cder2[N];  //Combined derivatives used to reduce number of necessary convolutions
-double c2[N], c3[N], c2v[N], dcf[N];
+double c2[N], c3[N], c2v[N], c2vdummy[N], dcf[N];
 double phiatt[N], cphiatt[N];
 double phi[N], phiid[N], planepot[N];
 
 //Other global variables
 
 double mu,new_mu,dmu,alpha,z,rhob,etab,ew;
-double p,old_gamma,new_gamma;
+double p,old_gamma,new_gamma,dR;
 double T,invT,rmin,dev;
 double Pi4R2,Pi4R;
 
-int iter=1, isweep, iend;
+int iter=1, isweep, iend, new_NiW, NiW_keep;
 int NiR=R/dz;           // Number of grid points within particle radius
-int NiW=R/dz;           // Number of grid points within wall
+#ifdef SPHERICAL
+int NiW=5*R/dz;		// Number of grid points within spherical wall  
+#else
+int NiW=R/dz;           // Number of grid points within planar wall
+#endif
 int NiRCUT=LJCUT/dz;    // Number of grid points within LJ cutoff
 
 // Files. Mainly used for diagnostic output
@@ -214,6 +219,25 @@ if(isweep>0)
 }
 #endif
 
+#ifdef SPHERICAL
+
+for(isweep=0; isweep<2; isweep++) 
+{
+if(isweep>0) 
+{
+	 for(i=0;i<N;i++) rhokeep[i]=rho[i];	
+	 new_NiW = NiW*1.1;
+	 dR = (new_NiW-NiW)*dz;
+	 NiW = new_NiW;
+	 converged = 0;
+	 iter = 0;
+	 setVext();
+	 initrho();
+}
+else NiW_keep = NiW;
+
+#endif	 
+
 #ifdef LJ
 //Form the attractive contribution
 for(i=0;i<N;i++) planepot[i]=0;
@@ -239,9 +263,23 @@ printf("Starting iteration.....\n"); // Start minimisation iteration
 
 while(converged==0 && iter++ <MAXITER)  {
 
-rs_convl(rho,w2,n2,NiR); //Get the weighted densities via convolution
-rs_convl(rho,w3,n3,NiR);
-rs_convl(rho,w2v,n2v,NiR);
+#ifdef SPHERICAL
+
+rs_convl(rho,w2,n2,NiR,1); //Get the weighted densities via convolution
+rs_convl(rho,w3,n3,NiR,1);
+rs_convl(rho,w3,n2v,NiR,2);
+rs_convl(rho,w2v,n2vdummy,NiR,1);
+for(i=0;i<N;i++) n2v[i]+=n2vdummy[i];
+n2[0]=n3[0]=n2v[0]=1e-12;
+
+
+#else
+
+rs_convl(rho,w2,n2,NiR,0); //Get the weighted densities via convolution
+rs_convl(rho,w3,n3,NiR,0);
+rs_convl(rho,w2v,n2v,NiR,0);
+
+#endif
 
 for(i=0;i<N;i++)  { n0[i]=n2[i]/Pi4R2; n1[i]=n2[i]/Pi4R; n1v[i]=n2v[i]/Pi4R; } //Others are simple related to n2,n3,n2v
   
@@ -263,15 +301,28 @@ cder1[i]=dn0[i]/Pi4R2 + dn1[i]/Pi4R + dn2[i];   //Combined derivatives
 cder2[i]=dn1v[i]/Pi4R + dn2v[i];
 }
 
-rs_convl(cder1,w2,c2,NiR);
-rs_convl(cder2,w2vn,c2v,NiR);
-rs_convl(dn3,w3,c3,NiR);
+#ifdef SPHERICAL
+
+rs_convl(cder1,w2,c2,NiR,3);
+rs_convl(dn3,w3,c3,NiR,3);
+rs_convl(cder2,w3,c2v,NiR,4);
+rs_convl(cder2,w2vn,c2vdummy,NiR,3);
+for(i=0;i<N;i++) c2v[i]+=c2vdummy[i];
+for(i=0;i<NiW;i++) c2[i]=c3[i]=c2v[i]=1e-12;
+
+#else
+
+rs_convl(cder1,w2,c2,NiR,0);
+rs_convl(dn3,w3,c3,NiR,0);
+rs_convl(cder2,w2vn,c2v,NiR,0);
+
+#endif
 
 for(i=0;i<N;i++) dcf[i] = -( c2[i] + c2v[i] + c3[i] );
 
 #ifdef LJ
 //Form the attractive contribution via a convolution (see notes file)
-rs_convl(rho,planepot,cphiatt,NiRCUT);
+rs_convl(rho,planepot,cphiatt,NiRCUT,1);
 #endif
 
 update();   // Call the Picard-Ng update                                                                           
@@ -284,11 +335,11 @@ if(iter%50==0) {printf("Iteration %5i Deviation= %10.8lg\n",iter++,dev);write_rh
 #ifdef DIAG
 for(i=0;i<N;i++)  fprintf(fpwdens,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,n0[i],n1[i],n2[i],n3[i],n1v[i],n2v[i]);
 for(i=0;i<N;i++)  fprintf(fpfdivs,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,dn0[i],dn1[i],dn2[i],dn3[i],dn1v[i],dn2v[i]);
-for(i=0;i<N;i++)  fprintf(fpdirect,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,c0[i],c1[i],c2[i],c3[i],c1v[i],c2v[i]);
+for(i=0;i<N;i++)  fprintf(fpdirect,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,/*c0[i],c1[i],*/c2[i],c3[i],/*c1v[i],*/c2v[i]);
 for(i=0;i<N;i++)  fprintf(fpdcf,"%f %12.10f\n",i*dz,dcf[i]);
 for(i=0;i<N;i++)  fprintf(fprho,"%f %12.10f\n",i*dz,rho[i]);
 for(i=0;i<N;i++)  fprintf(fprhonew,"%f %12.10f %12.10f %12.10f\n",i*dz,rhonew[i],alpha*exp(invT*(mu-Vext[i])+dcf[i]),exp(invT*(mu-Vext[i])));
-exit(0);  //Stops after first iteration to keep file sizes small. Remove this line to get data on all iterations
+if(iter==40) exit(0);  //Stops after first iteration to keep file sizes small. Remove this line to get data on all iterations
 #endif //}}}
 
 // Copy the new density profile to the old one.
@@ -326,7 +377,15 @@ printf("gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());fprintf(fp
 #ifdef LR
 printf("Sum rule pressure: %10.8lg (%10.8lg)\n",sumrule(),p);fprintf(fpout,"Sum rule pressure: %10.8lg (%10.8lg)\n",sumrule(),p);
 #else
+#ifdef SPHERICAL
+if(isweep==0) {old_gamma = omega(1)/(PI_4*NiW*dz*NiW*dz); printf("Old gamma: %f\n", old_gamma);}
+else {new_gamma = omega(1)/(PI_4*NiW*dz*NiW*dz); printf("New gamma: %f\n", new_gamma);}
+}
+printf("Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n p+2gamma/R + dgamma/dr = %f\n",T*rho[NiW],fabs(T*rho[NiW]-p), p+2.*new_gamma/(NiW*dz)+ (new_gamma-old_gamma)/dR);
+fprintf(fpout,"Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n p+2gamma/R + dgamma/dr = %f\n",T*rho[NiW],fabs(T*rho[NiW]-p),p+2*new_gamma/(NiW*dz)+ (new_gamma-old_gamma)/dR);
+#else
 printf("Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n",T*rho[NiW],fabs(T*rho[NiW]-p));fprintf(fpout,"Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n",T*rho[NiW],fabs(T*rho[NiW]-p));
+#endif
 #endif
   	
 write_rho(); //This is written out to rholive incase we want to restart from the same profile
@@ -361,7 +420,7 @@ if(zwall>0)
      if(Vext[i]>BARRIER) Vext[i]=BARRIER;
 }
 #endif
-    }
+}
     
 #ifdef DIAG 
   for(i=0;i<N;i++)  fprintf(fpVext," %f %f\n",(i-NiW)*dz,Vext[i]);
@@ -472,7 +531,7 @@ fclose(fpwhts);
 //}}}
 	
 //{{{ real space convolution
-void rs_convl(const double *input, const double *response, double *output, int HALFWIDTH)   // real_space discrete convolution. 
+void rs_convl(const double *input, const double *response, double *output, int HALFWIDTH, int mode)   // real_space discrete convolution. 
 
 {
 	
@@ -486,8 +545,30 @@ void rs_convl(const double *input, const double *response, double *output, int H
   	  	  output[i]=0.0;
   	  	  for(j=i-HALFWIDTH;j<=i+HALFWIDTH;j++)
   	  	  {
-  	  	  	  if(j>=0 && j<N) output[i]+= input[j] * response[MOD(i-j, N)];
-  	  	  }
+  	  	  	  if(j>=0 && j<N) 
+  	  	  	  {
+				  #ifdef SPHERICAL
+				  if(mode>0 && mode<3) output[i]+= input[j] * response[MOD(i-j, N)] * j * dz;
+				  else if (mode>2) {
+					  output[i]+= (input[j] * response[MOD(i-j, N)])/ (j * dz);
+					  if(mode==4) output[i]/=(j*dz);
+				  }
+				  else output[i]+=output[i]+= input[j] * response[MOD(i-j, N)];
+				  #else
+				  output[i]+= input[j] * response[MOD(i-j, N)];
+				  #endif
+			  }
+		  }
+		  
+		  #ifdef SPHERICAL
+		  
+		  if(mode>0 && mode<3) {
+			   output[i]/=i*dz;
+			   if(mode==2) output[i]/=i*dz;
+		  }
+		  else if (mode>2) output[i]*= i * dz;
+		  
+		  #endif
   	  }
   	  
  
@@ -674,16 +755,17 @@ double omega(int mode)
 #ifdef LJ
          phi[i] += 0.5*rho[i]*cphiatt[i];  
 #endif
-         phi[i] += mode*p;       
+
+		phi[i] += mode*p; 
+     
          if(i>=NiR && rho[i]>0) phiid[i] = T*rho[i]*(log(rho[i])-1.0) + rho[i]*(Vext[i]-mu);  //Due to convolution phi has contributions over a larger range than the ideal part
        }
 
     sumid=0.0;sumphi=0.0;
     for (i=0;i<iend-1;i++) sumphi+=phi[i]+phi[i+1];        
     for (i=0;i<iend-1;i++) sumid+=phiid[i]+phiid[i+1];
-    
-  return dz*(sumid+sumphi)/2.0;
-
+     
+	return dz*(sumid+sumphi)/2.0;
  }
 //}}}
 
