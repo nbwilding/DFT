@@ -12,7 +12,18 @@ compessibility profile, the adsorption and the surface tension.
 Checking capability includes comparison with the pressure sum rule and
 the Gibbs adsoprtion theorem. NBW March 2018
 
-*/
+The version contained here is a branch of the basic code designed to find the profile under the constraint of a prescribed adsorption. The udate routine performs a constrained minimisation similar to that described in Adam P. Hughes, Uwe Thiele, and Andrew J. Archer, The Journal of Chemical Physics 142, 074702 (2015) 
+
+As an example the program can find the profile and surface tension for a state point near drying. The following parameters do this for an adsorption Gamma=-4.0 and attractive wall strength ew=0.001 at a subcritical coexistence state point
+corresponding to  T=1.022566 for which the bulk liquid density rho=0.597845620728.
+
+./DFT 1.022566 0.05 0.001 0.597845620728 -4.0
+
+Note that by repeating for a range of adsorption values, one can use
+the composite free energy to construct the binding potential as
+described in the above reference.
+*/ 
+
  
 #include <math.h>
 #include <stdio.h>
@@ -21,18 +32,18 @@ the Gibbs adsoprtion theorem. NBW March 2018
 
 #define MOD(n, N) ((n<0)? N+n : n)
 
-#define PI 3.14159265358979
-#define PI_4 12.56637061435916
-#define N 20000            // Total number of grid points
+#define PI 3.14159265359
+#define PI_4 12.5663706144
+#define N 30000            // Total number of grid points
 #define BARRIER 500        // Height of hard wall potential
 #define R 0.5              // Particle diameter sigma=1.  sets relationship between rho and eta 
 #define LJCUT 2.5          // Truncation radius for the Lennard-Jones potentials
 #define dz 0.005           // Grid spacing. Should be a factor of R above.
 #define epsilon 1.0        // Sets the unit of energy. Don't change this.
 #define drho 0.0000001     // Density step size for calculating derivatives w.r.t. mu 
-#define TOL 1e-12          // Tolerance on convergence of density distribution
+#define TOL 1e-11          // Tolerance on convergence of density distribution
 #define MAXITER 800000     // Maximum number of iterations
-#define NGFREQ 3           // Ratio of Picard to Ng algorithm updates. Can be set as low as 3, but if in doubt set to 1000
+#define NGFREQ 10           // Ratio of Picard to Ng algorithm updates. Can be set as low as 3, but if in doubt set to 1000
 //#define WHITEBEAR        // Switch to use White Bear Functional
 #define ROSENFELD          // Switch to use Rosenfeld Functional
 #define LJ                 // Turns on truncated Lennard-Jones-like fluid-fluid interactions
@@ -40,7 +51,7 @@ the Gibbs adsoprtion theorem. NBW March 2018
 //#define MUDIFF           // Uncomment to calculate derivatives with respect to mu: the compressibility d\rho(z)/d\mu and the gibbs adsorption: -\d\gamma/\mu
 //#define SHIFTEDWALL      // Use a 9-3 wall potential which is shifted so that its minimum is at the hard wall
 //#define DIAG             // Uncomment this line to get diagnostic information written to files in a separate directory "Diag"
-//#define READRHO          // Uncomment this line to read in an existing density profile as a starting guess
+#define READRHO          // Uncomment this line to read in an existing density profile as a starting guess
 
 /* Function definitions */
 
@@ -65,12 +76,12 @@ double phi[N], phiid[N], planepot[N];
 
 //Other global variables
 
-double mu,new_mu,dmu,alpha,z,rhob,etab,ew;
+double mu,new_mu,dmu,alpha,z,rhob,etab,ew,t_adsorb;
 double p,old_gamma,new_gamma;
 double T,invT,rmin,dev;
 double Pi4R2,Pi4R;
 
-int iter=1, isweep, iend;
+int iter=0, isweep, iend;
 int NiR=R/dz;           // Number of grid points within particle radius
 int NiW=R/dz;           // Number of grid points within wall
 int NiRCUT=LJCUT/dz;    // Number of grid points within LJ cutoff
@@ -91,32 +102,34 @@ exit(0);
 #endif
 #endif
 #ifdef LR
-if(argc!=6) 
+if(argc!=7) 
    {
-     printf("\n Usage: %s [ T alpha ew rhob runcode\n", argv[0]);
+     printf("\n Usage: %s [ T alpha ew rhob t_adsorb runcode\n", argv[0]);
      exit(1);
    }
 T  = atof(argv[1]);
 alpha = atof(argv[2]);
 ew = atof(argv[3]);
 rhob = atof(argv[4]); // Setting this also sets the chemical potential and pressure- see below
-strcpy(runcode,argv[5]);  
+t_adsorb = atof(argv[5]);
+ strcpy(runcode,argv[6]);  
 strcat(runcode,".dat");
 fpout = fopen(runcode,"w");
-if(!strcmp(argv[5], "stderr")) *fpout=*stderr;
+if(!strcmp(argv[6], "stderr")) *fpout=*stderr;
 #else
-if(argc!=5) 
+if(argc!=6) 
    {
-     printf("\n Usage: %s [T alpha rhob runcode\n", argv[0]);
+     printf("\n Usage: %s [T alpha rhob t_adsorb runcode\n", argv[0]);
      exit(1);
    }
 T  = atof(argv[1]);
 alpha = atof(argv[2]);
 rhob = atof(argv[3]);
-strcpy(runcode,argv[4]);  
+t_adsorb = atof(argv[4]);
+strcpy(runcode,argv[5]);
 strcat(runcode,".dat");
 fpout = fopen(runcode,"w");
-if(!strcmp(argv[4], "stderr")) *fpout=*stderr;
+if(!strcmp(argv[5], "stderr")) *fpout=*stderr;
 #endif
 //}}}
 
@@ -130,8 +143,8 @@ etab  = rhob * PI/6.;
 //{{{ Messages about run.  Note "comments" of this form arise from the folding capabilities of some editors. I use jedit.
 
 printf("\nDFT for a fluid in planar geometry: NBW 2018\n");
-printf("\nState parameters:\n  rho_b= %12.10f\n  eta_b= %12.10f\n  mu= %12.10f\n  Pressure= %12.10f\n  Temperature= %10.8f\n  Inverse Temperature= %f\n\n",rhob,etab,mu,p,T,invT);
-fprintf(fpout,"rho_b= %12.10f\neta_b= %12.10f\nmu= %12.10f\nPressure= %12.10f\nTemperature= %10.8f\nInverse Temperature= %10.8f\n",rhob,etab,mu,p,T,invT);
+ printf("\nState parameters:\n  rho_b= %12.10f\n  eta_b= %12.10f\n  mu= %12.10f\n  Pressure= %12.10f\n  Temperature= %10.8f\n  Inverse Temperature= %f\n  Target adsorption= %f\n\n",rhob,etab,mu,p,T,invT,t_adsorb);
+ fprintf(fpout,"rho_b= %12.10f\neta_b= %12.10f\nmu= %12.10f\nPressure= %12.10f\nTemperature= %10.8f\nInverse Temperature= %10.8f\n  Target adsorption= %10.8f \n",rhob,etab,mu,p,T,invT,t_adsorb);
 printf("Model parameters:\n"); 
 #ifdef ROSENFELD
   printf("  ROSENFELD Functional\n");fprintf(fpout,"ROSENFELD Functional\n");
@@ -276,6 +289,7 @@ rs_convl(rho,planepot,cphiatt,NiRCUT);
 
 update();   // Call the Picard-Ng update                                                                           
 
+
 if(dev<TOL) converged = 1;
 
 if(iter%50==0) {printf("Iteration %5i Deviation= %10.8lg\n",iter++,dev);write_rho();}
@@ -295,12 +309,13 @@ exit(0);  //Stops after first iteration to keep file sizes small. Remove this li
 
 for(i=0;i<iend;i++) rho[i]=rhonew[i];  // Note we fix the 'bulk' density far from the wall
 
+
+
 } //end of iteration loop
 
-if(converged==1) printf("\nConverged to within tolerance in %i iterations\n",iter);
+if(converged==1) printf("Converged to within tolerance in %i iterations\n",iter);
 else printf("Failed to converge after %i iterations\n",MAXITER);
 
-fprintf(fpout,"--------------------------------------------------------------- \n\n");
 #ifdef MUDIFF
 if(isweep==0) {
 	old_gamma = omega(1);
@@ -313,15 +328,13 @@ else
 }
 }
 printf("-d(gamma)/dmu= %f\nadsorption= %f\n",-(new_gamma-old_gamma)/dmu,adsorption());
-fprintf(fpout,"      z         rho(z)     rho(z)/rhob         eta(z)         Chi(z)\n\n");
-for(i=0;i<iend;i++) {z=(i-NiW)*dz;  fprintf(fpout,"A  %f  %12.10f  %12.10f  %12.10f  %12.10f\n",z,rhokeep[i],rhokeep[i]/rhob,rhokeep[i]*PI/6,(rho[i]-rhokeep[i])/dmu);}
+for(i=0;i<iend;i++) {z=(i-NiW)*dz; if(rhokeep[i]>1e-8) fprintf(fpout,"A %f %12.10f %12.10f %12.10f %12.10f\n",z,rhokeep[i],rhokeep[i]/rhob,rhokeep[i]*PI/6,(rho[i]-rhokeep[i])/dmu);}
 #else
-omega(1);
-fprintf(fpout,"       z        rho(z)      rho(z)/rhob      eta(z)         d[z]         Phi(z) \n\n");
-for(i=0;i<iend;i++) {z=(i-NiW)*dz; fprintf(fpout,"B  %f  %12.10lg  %12.10lg  %12.10lg  %12.10lg  %12.10lg\n",z,rho[i],rho[i]/rhob,rho[i]*PI/6,d[i],phi[i]+phiid[i]);}
-printf("gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());fprintf(fpout,"gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());
+ omega(1);
+ fprintf(fpout,"       z        rho(z)      rho(z)/rhob      eta(z)         d[z]         Phi(z) \n\n");
+ for(i=0;i<iend;i++) {z=(i-NiW)*dz; fprintf(fpout,"B  %f  %14.12le  %14.12le  %14.12le  %14.12le  %14.12le\n",z,rho[i],rho[i]/rhob,rho[i]*PI/6,d[i],phi[i]+phiid[i]);}
+printf("gamma= %14.12f\nadsorption= %14.12f\n",omega(1),adsorption());fprintf(fpout,"gamma= %14.12f\nadsorption= %14.12f\n",omega(1),adsorption());
 #endif
-
 
 #ifdef LR
 printf("Sum rule pressure: %10.8lg (%10.8lg)\n",sumrule(),p);fprintf(fpout,"Sum rule pressure: %10.8lg (%10.8lg)\n",sumrule(),p);
@@ -371,11 +384,11 @@ if(zwall>0)
 } //}}}
 
 //{{{ write_rho
-		void write_rho()
-	{
-		int i;
+void write_rho()
+{
+    	    int i;
 	    fprholive=fopen("rholive","w");
-	    for(i=0;i<N;i++) fprintf(fprholive,"%f %12.10f %12.10f %lg\n",i*dz,rho[i],rho[i]/rhob,d[i]);
+	    for(i=0;i<N;i++) fprintf(fprholive,"%f %14.12le %14.12le %lg\n",i*dz,rho[i],rho[i]/rhob,d[i]);
 	    fclose(fprholive);
     }
 
@@ -389,14 +402,15 @@ void initrho()  //set the density initially to be the bulk density and write it 
   int i;
   float dummy;
 #ifdef READRHO
-  printf("Reading in starting rho(z) from rho_init\n");
-  fprhostart=fopen("rho_init","r");
-  for(i=0;i<N;i++) fscanf(fprhostart,"%f %lg \n",&dummy,&rho[i]); 
+  printf("Reading in starting rho(z) from rhoinit\n");
+  fprhostart=fopen("rhoinit","r");
+  for(i=0;i<N;i++) fscanf(fprhostart,"%f %le \n",&dummy,&rho[i]); 
   fclose(fprhostart);
 #else
   for(i=0;i<N;i++)  rho[i]=exp(-Vext[i]);
   for(i=0;i<N;i++)  if(Vext[i]<10) rho[i]=rhob;
 #endif
+
   write_rho(); 
 } //}}}
 
@@ -406,8 +420,8 @@ void setwhts()
 Note that the negative parts appear in wrap-around order ie at the end of the array */
 
 {
-  int i,ind;
-double z;
+ int i,ind;
+ double z;
  for(i=0;i<N;i++) {w3[0]=0; w2[i]=0; w1[i]=0; w0[i]=0; w2v[i]=0;  w1v[i]=0; w1vn[i]=0; w2vn[i]=0;}
 
 for(i=0;i<=NiR;i++) // The heaviside function is unity when it's argument is zero or greater. 
@@ -681,8 +695,7 @@ double omega(int mode)
     sumid=0.0;sumphi=0.0;
     for (i=0;i<iend-1;i++) sumphi+=phi[i]+phi[i+1];        
     for (i=0;i<iend-1;i++) sumid+=phiid[i]+phiid[i+1];
-    
-  return dz*(sumid+sumphi)/2.0;
+    return dz*(sumid+sumphi)/2.0;
 
  }
 //}}}
@@ -705,7 +718,7 @@ void update()
 Every NGFREQ iteration we substitute a Picard step with a step of the Ng algorithm, see J. Chem. Phys. 61, 2680 (1974) */
 {	
 double ip0101, ip0202, ip0102, ipn01, ipn02;	
-double a1,a2,norm;
+double a1, a2, norm, adsorb;
 int i;
 
 dev=0.0;
@@ -744,19 +757,42 @@ if(iter>3)
    a2 = (ip0102 * ipn01 - ip0101 * ipn02) / norm; 
   }
 
+for(i=0;i<iend;i++) 
+  {
+   if(dev<1e-13 && iter % NGFREQ==0) rhonew[i] = (1-a1-a2)*g[i] + a1*g1[i] + a2*g2[i]; //Only use Ng if first sufficiently converged by Picard
+      else rhonew[i]=(1-alpha)*rho[i] + alpha*g[i];    
+      g2[i] = g1[i]; // Shuffle down
+      g1[i] = g[i];
+      d2[i] = d1[i];
+      d1[i] = d[i];
+   }
 
-if(dev<1e-3 && iter % NGFREQ==0)
-    for(i=0;i<iend;i++)   rhonew[i] = (1-a1-a2)*g[i] + a1*g1[i] + a2*g2[i]; //Only use Ng if first sufficiently converged by Picard
- else
-   for(i=0;i<iend;i++)  rhonew[i]=(1-alpha)*rho[i] + alpha*g[i];    
+ double rn;
+ adsorb=adsorption();
+ for (i=0,dev=0.0; i<iend; i++) 
+  {
+    //the following does not work
+    /*
+    rn=(t_adsorb/adsorb)* (rhonew[i]-rhob)+rhob;
+    rhonew[i] = rn;
+    dev+=fabs(rhonew[i]-rho[i]);
+    */
+    //the following works
 
-   for(i=0;i<iend;i++)
-     {
-       g2[i] = g1[i]; 
-       g1[i] = g[i];
-       d2[i] = d1[i];
-       d1[i] = d[i];
-     }
+    //     if(rhonew[i]>0) 
 
-} 
-//}}}
+  if(Vext[i]<10) 
+      {
+      rn=(t_adsorb/adsorb)* (rhonew[i]-rhob)+rhob;
+      //      if(rn>0) rhonew[i] = rn;
+      rhonew[i] = rn;
+      dev+=fabs(rhonew[i]-rho[i]);
+      }
+
+
+  }
+      dev*=dz;
+
+
+
+} //}}}
