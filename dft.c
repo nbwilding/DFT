@@ -17,7 +17,7 @@ The version contained here is a branch of the basic code designed to find the pr
 As an example the program can find the profile and surface tension for a state point near drying. The following parameters do this for an adsorption Gamma=-4.0 and attractive wall strength ew=0.001 at a subcritical coexistence state point
 corresponding to  T=1.022566 for which the bulk liquid density rho=0.597845620728.
 
-./DFT 1.022566 0.05 0.001 0.597845620728 -4.0
+./DFT 1.022566 0.05 0.001 0.597845620728 -4.0 output
 
 Note that by repeating for a range of adsorption values, one can use
 the composite free energy to construct the binding potential as
