@@ -12,6 +12,9 @@ compessibility profile, the adsorption and the surface tension.
 Checking capability includes comparison with the pressure sum rule and
 the Gibbs adsoprtion theorem. NBW March 2018
 
+The program is currently under development to introduce use of spherical
+geometry. Mary Coe June 2018.
+
 */
  
 #include <math.h>
@@ -66,15 +69,15 @@ double phi[N], phiid[N], planepot[N];
 
 //Other global variables
 
-double mu,new_mu,dmu,alpha,z,rhob,etab,ew;
+double mu,new_mu,dmu,alpha,z,rhob,etab,ew, cont;
 double p,old_gamma,new_gamma,dR;
 double T,invT,rmin,dev;
 double Pi4R2,Pi4R;
 
-int iter=1, isweep, iend, new_NiW, NiW_keep;
+int iter=1, isweep, iend, new_NiW, isweep_sphere, NiW_keep;
 int NiR=R/dz;           // Number of grid points within particle radius
 #ifdef SPHERICAL
-int NiW=5*R/dz;		// Number of grid points within spherical wall  
+int NiW=10*R/dz;		// Number of grid points within spherical wall  
 #else
 int NiW=R/dz;           // Number of grid points within planar wall
 #endif
@@ -220,23 +223,25 @@ if(isweep>0)
 #endif
 
 #ifdef SPHERICAL
+#ifdef MUDIFF
+if(isweep>0) {
+#endif
+for(isweep_sphere=0; isweep_sphere<2; isweep_sphere++) {
+	if(isweep_sphere>0) 
+	{
+	for(i=0;i<N;i++) rhokeep[i]=rho[i];	
+	new_NiW = NiW*1.1;
+	dR = (new_NiW-NiW)*dz;
+	NiW = new_NiW;
+	converged = 0;
+	iter = 0;
+	setVext();
+	initrho();
+	}
+	else NiW_keep = NiW;
 
-for(isweep=0; isweep<2; isweep++) 
-{
-if(isweep>0) 
-{
-	 for(i=0;i<N;i++) rhokeep[i]=rho[i];	
-	 new_NiW = NiW*1.1;
-	 dR = (new_NiW-NiW)*dz;
-	 NiW = new_NiW;
-	 converged = 0;
-	 iter = 0;
-	 setVext();
-	 initrho();
-}
-else NiW_keep = NiW;
 
-#endif	 
+#endif
 
 #ifdef LJ
 //Form the attractive contribution
@@ -308,7 +313,6 @@ rs_convl(dn3,w3,c3,NiR,3);
 rs_convl(cder2,w3,c2v,NiR,4);
 rs_convl(cder2,w2vn,c2vdummy,NiR,3);
 for(i=0;i<N;i++) c2v[i]+=c2vdummy[i];
-for(i=0;i<NiW;i++) c2[i]=c3[i]=c2v[i]=1e-12;
 
 #else
 
@@ -318,11 +322,11 @@ rs_convl(cder2,w2vn,c2v,NiR,0);
 
 #endif
 
-for(i=0;i<N;i++) dcf[i] = -( c2[i] + c2v[i] + c3[i] );
+for(i=0;i<N;i++) dcf[i] = -( c2[i] + c2v[i] + c3[i] ); 
 
 #ifdef LJ
 //Form the attractive contribution via a convolution (see notes file)
-rs_convl(rho,planepot,cphiatt,NiRCUT,1);
+rs_convl(rho,planepot,cphiatt,NiRCUT,0);
 #endif
 
 update();   // Call the Picard-Ng update                                                                           
@@ -367,10 +371,17 @@ printf("-d(gamma)/dmu= %f\nadsorption= %f\n",-(new_gamma-old_gamma)/dmu,adsorpti
 fprintf(fpout,"      z         rho(z)     rho(z)/rhob         eta(z)         Chi(z)\n\n");
 for(i=0;i<iend;i++) {z=(i-NiW)*dz;  fprintf(fpout,"A  %f  %12.10f  %12.10f  %12.10f  %12.10f\n",z,rhokeep[i],rhokeep[i]/rhob,rhokeep[i]*PI/6,(rho[i]-rhokeep[i])/dmu);}
 #else
-omega(1);
 fprintf(fpout,"       z        rho(z)      rho(z)/rhob      eta(z)         d[z]         Phi(z) \n\n");
+#ifdef SPHERICAL
+printf("iend is %d:\n", iend);
+if(isweep_sphere>0) {
+for(i=0;i<iend;i++) {z=(i-NiW_keep)*dz; fprintf(fpout,"B  %f  %12.10lg  %12.10lg  %12.10lg  %12.10lg  %12.10lg\n",z,rhokeep[i],rhokeep[i]/rhob,rhokeep[i]*PI/6,d[i],phi[i]+phiid[i]);}
+}
+#else
+omega(1);
 for(i=0;i<iend;i++) {z=(i-NiW)*dz; fprintf(fpout,"B  %f  %12.10lg  %12.10lg  %12.10lg  %12.10lg  %12.10lg\n",z,rho[i],rho[i]/rhob,rho[i]*PI/6,d[i],phi[i]+phiid[i]);}
 printf("gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());fprintf(fpout,"gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());
+#endif
 #endif
 
 
@@ -378,11 +389,24 @@ printf("gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());fprintf(fp
 printf("Sum rule pressure: %10.8lg (%10.8lg)\n",sumrule(),p);fprintf(fpout,"Sum rule pressure: %10.8lg (%10.8lg)\n",sumrule(),p);
 #else
 #ifdef SPHERICAL
-if(isweep==0) {old_gamma = omega(1)/(PI_4*NiW*dz*NiW*dz); printf("Old gamma: %f\n", old_gamma);}
-else {new_gamma = omega(1)/(PI_4*NiW*dz*NiW*dz); printf("New gamma: %f\n", new_gamma);}
+if(isweep_sphere==0) {
+	old_gamma = omega(1);
+	printf("Old gamma: %f\n", old_gamma); old_gamma/=(PI_4*(NiW)*dz*(NiW)*dz); printf("Old gamma: %f NiW: %d\n", old_gamma, NiW);}
+
+else if (isweep_sphere>0) {
+	new_gamma = omega(1);
+	new_gamma/=(PI_4*(NiW)*dz*(NiW)*dz); 
+	printf("New gamma: %f for wall %d\n", new_gamma, NiW);
+	}
 }
-printf("Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n p+2gamma/R + dgamma/dr = %f\n",T*rho[NiW],fabs(T*rho[NiW]-p), p+2.*new_gamma/(NiW*dz)+ (new_gamma-old_gamma)/dR);
-fprintf(fpout,"Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n p+2gamma/R + dgamma/dr = %f\n",T*rho[NiW],fabs(T*rho[NiW]-p),p+2*new_gamma/(NiW*dz)+ (new_gamma-old_gamma)/dR);
+
+cont = p + (2.0*new_gamma/((NiW)*dz)) + ((new_gamma-old_gamma)/dR);
+printf("Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n p+2gamma/R + dgamma/dr = %f\n",T*rho[NiW],fabs(T*rho[NiW]-p), cont);
+printf("p: %f 2gamma/R: %f dgamma/dR: %f\n", p, 2.0*new_gamma/((NiW)*dz), (new_gamma-old_gamma)/dR);
+fprintf(fpout,"Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n p+2gamma/R + dgamma/dr = %f\n",T*rho[NiW],fabs(T*rho[NiW]-p),p + 2.0*new_gamma/(NiW*dz) + (new_gamma-old_gamma)/dR);
+#ifdef MUDIFF
+}
+#endif
 #else
 printf("Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n",T*rho[NiW],fabs(T*rho[NiW]-p));fprintf(fpout,"Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n",T*rho[NiW],fabs(T*rho[NiW]-p));
 #endif
@@ -532,7 +556,13 @@ fclose(fpwhts);
 	
 //{{{ real space convolution
 void rs_convl(const double *input, const double *response, double *output, int HALFWIDTH, int mode)   // real_space discrete convolution. 
-
+/* The different modes here refer to the spherical case where multiplications and divisions by r and r' are important. The modes
+ * are as follows:
+ * 0 = No multiplications or divisions by r, r'. Used for Vext and the Planar Potential.
+ * 1 = Multiply by r' and divide by r. Used for spherical weighted densities.
+ * 2 = Multiply by r' and divide by r twice. Used for first term in vector weighted densities.
+ * 3 = Multiply by r and divide by r'. Used in correlation functions in spherical case.
+ * 4 = Multiply by r and divide by r' twice. Used in vector correlation functions. */
 {
 	
   int i,j,k;
@@ -550,10 +580,12 @@ void rs_convl(const double *input, const double *response, double *output, int H
 				  #ifdef SPHERICAL
 				  if(mode>0 && mode<3) output[i]+= input[j] * response[MOD(i-j, N)] * j * dz;
 				  else if (mode>2) {
-					  output[i]+= (input[j] * response[MOD(i-j, N)])/ (j * dz);
-					  if(mode==4) output[i]/=(j*dz);
+					if(j>0) {
+						output[i]+= (input[j] * response[MOD(i-j, N)])/ (j * dz);
+						if(mode==4) output[i]/=(j*dz);
+					}
 				  }
-				  else output[i]+=output[i]+= input[j] * response[MOD(i-j, N)];
+				  else output[i] += input[j] * response[MOD(i-j, N)];
 				  #else
 				  output[i]+= input[j] * response[MOD(i-j, N)];
 				  #endif
@@ -563,8 +595,10 @@ void rs_convl(const double *input, const double *response, double *output, int H
 		  #ifdef SPHERICAL
 		  
 		  if(mode>0 && mode<3) {
+			  if(i>0) {
 			   output[i]/=i*dz;
 			   if(mode==2) output[i]/=i*dz;
+		   }
 		  }
 		  else if (mode>2) output[i]*= i * dz;
 		  
@@ -758,9 +792,13 @@ double omega(int mode)
 
 		phi[i] += mode*p; 
      
-         if(i>=NiR && rho[i]>0) phiid[i] = T*rho[i]*(log(rho[i])-1.0) + rho[i]*(Vext[i]-mu);  //Due to convolution phi has contributions over a larger range than the ideal part
+        if(i>=(NiW) && rho[i]>0) phiid[i] = T*rho[i]*(log(rho[i])-1.0) + rho[i]*(Vext[i]-mu);  //Due to convolution phi has contributions over a larger range than the ideal part
+       
+#ifdef SPHERICAL
+        if(i>NiW) {phi[i]*=PI_4*(i-1)*dz*(i-1)*dz; phiid[i]*=PI_4*(i-1)*(i-1)*dz*dz;} //Due to definition of integration here, must multiply by area of circle.
+#endif
        }
-
+	
     sumid=0.0;sumphi=0.0;
     for (i=0;i<iend-1;i++) sumphi+=phi[i]+phi[i+1];        
     for (i=0;i<iend-1;i++) sumid+=phiid[i]+phiid[i+1];
