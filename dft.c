@@ -11,9 +11,8 @@ The attractive part is treated in mean field.  The code also allows calculation 
 compessibility profile, the adsorption and the surface tension.
 Checking capability includes comparison with the pressure sum rule and
 the Gibbs adsoprtion theorem. NBW March 2018
-
-The program is currently under development to introduce use of spherical
-geometry. Mary Coe June 2018.
+* 
+* Edited for a spherical geometry by Mary Coe, University of Bristol, August 2018.
 
 */
  
@@ -44,7 +43,8 @@ geometry. Mary Coe June 2018.
 //#define SHIFTEDWALL      // Use a 9-3 wall potential which is shifted so that its minimum is at the hard wall
 //#define DIAG             // Uncomment this line to get diagnostic information written to files in a separate directory "Diag"
 //#define READRHO          // Uncomment this line to read in an existing density profile as a starting guess
-#define SPHERICAL		   // Turns on spherical wall geometry
+#define SPHERICAL		   // Uncomment this line to switch to spherical geometry
+#define CONTACT_RULE
 
 /* Function definitions */
 
@@ -60,26 +60,30 @@ double pressure(), chempot(), sumrule(), adsorption();
 double rho[N], rhonew[N], rhokeep[N], Vext[N];
 double g[N], g1[N], g2[N], d[N], d1[N], d2[N], d01[N], d02[N]; //Used by update function
 double w0[N], w1[N], w2[N], w3[N], w1v[N], w2v[N], w1vn[N], w2vn[N];
-double n0[N], n1[N], n2[N], n3[N], n1v[N], n2v[N], n2vdummy[N];
+double n0[N], n1[N], n2[N], n3[N], n1v[N], n2v[N];
 double dn0[N], dn1[N], dn2[N], dn3[N], dn1v[N], dn2v[N];
 double cder1[N], cder2[N];  //Combined derivatives used to reduce number of necessary convolutions
-double c2[N], c3[N], c2v[N], c2vdummy[N], dcf[N];
+double c2[N], c3[N], c2v[N], dcf[N];
 double phiatt[N], cphiatt[N];
 double phi[N], phiid[N], planepot[N];
 
 //Other global variables
 
-double mu,new_mu,dmu,alpha,z,rhob,etab,ew, cont;
-double p,old_gamma,new_gamma,dR;
+double mu,new_mu,dmu,alpha,z,rhob,etab,ew;
+#ifdef SPHERICAL
+double n2v_dummy[N], c2v_dummy[N], cont_rule, dR;
+int NiW_keep, r;
+#endif
+double p,old_gamma,new_gamma;
 double T,invT,rmin,dev;
 double Pi4R2,Pi4R;
 
-int iter=1, isweep, iend, new_NiW, isweep_sphere, NiW_keep;
+int iter=1, isweep, iend;
 int NiR=R/dz;           // Number of grid points within particle radius
 #ifdef SPHERICAL
-int NiW=10*R/dz;		// Number of grid points within spherical wall  
+int NiW = 4*R/dz;
 #else
-int NiW=R/dz;           // Number of grid points within planar wall
+int NiW=R/dz;           // Number of grid points within wall
 #endif
 int NiRCUT=LJCUT/dz;    // Number of grid points within LJ cutoff
 
@@ -222,27 +226,23 @@ if(isweep>0)
 }
 #endif
 
-#ifdef SPHERICAL
-#ifdef MUDIFF
-if(isweep>0) {
+#ifdef CONTACT_RULE
+for(isweep=0; isweep<2; isweep++)
+{
+if(isweep>0)
+{
+    for(i=0;i<N;i++) rhokeep[i]=rho[i];	
+    NiW_keep = NiW;
+    NiW *= 1.01;
+    printf("NiW keep %d NiW %d\n",NiW_keep,NiW);
+    dR = (NiW-NiW_keep)*dz;
+    printf("dR is %f\n",dR);
+    converged = 0;
+    iter = 0;
+    setVext();
+    initrho();
+}
 #endif
-for(isweep_sphere=0; isweep_sphere<2; isweep_sphere++) {
-	if(isweep_sphere>0) 
-	{
-	for(i=0;i<N;i++) rhokeep[i]=rho[i];	
-	new_NiW = NiW*1.1;
-	dR = (new_NiW-NiW)*dz;
-	NiW = new_NiW;
-	converged = 0;
-	iter = 0;
-	setVext();
-	initrho();
-	}
-	else NiW_keep = NiW;
-
-
-#endif
-
 #ifdef LJ
 //Form the attractive contribution
 for(i=0;i<N;i++) planepot[i]=0;
@@ -269,23 +269,26 @@ printf("Starting iteration.....\n"); // Start minimisation iteration
 while(converged==0 && iter++ <MAXITER)  {
 
 #ifdef SPHERICAL
-
-rs_convl(rho,w2,n2,NiR,1); //Get the weighted densities via convolution
+//Scalar weighted densities given by final eq. pp 15 of Roth Review 2010.
+rs_convl(rho,w2,n2,NiR,1);
 rs_convl(rho,w3,n3,NiR,1);
-rs_convl(rho,w3,n2v,NiR,2);
-rs_convl(rho,w2v,n2vdummy,NiR,1);
-for(i=0;i<N;i++) n2v[i]+=n2vdummy[i];
-n2[0]=n3[0]=n2v[0]=1e-12;
 
+//vector weighted densities given by eq (B.5) in accompanying documentation
+rs_convl(rho,w3,n2v,NiR,1);
+rs_convl(rho,w2v,n2v_dummy,NiR,1);
+
+for(i=NiR;i<N;i++) {
+	n2[i]/=i; n3[i]/=i;
+	//n2v[i]*=PI*dz*dz;
+	n2v[i] /= (i * i * dz);
+	n2v[i] += (n2v_dummy[i]/i);
+}
 
 #else
-
 rs_convl(rho,w2,n2,NiR,0); //Get the weighted densities via convolution
 rs_convl(rho,w3,n3,NiR,0);
 rs_convl(rho,w2v,n2v,NiR,0);
-
 #endif
-
 for(i=0;i<N;i++)  { n0[i]=n2[i]/Pi4R2; n1[i]=n2[i]/Pi4R; n1v[i]=n2v[i]/Pi4R; } //Others are simple related to n2,n3,n2v
   
 #ifdef WHITEBEAR //When we have a long ranged wall, we need to make sure that n3 is non-zero or the functional derivatives blow up
@@ -301,28 +304,52 @@ make_dn3(); make_dn1v(); make_dn2v();
 
 //Here we reduce the number of convolutions necessary by exploiting the relationships between w0, w1, w2, w1v, w2v (see notes)
 for(i=0;i<N;i++)
-{	
+{	//if(isnan(dn0[i])) dn0[i]=1e-12;
+//if(isnan(dn0[i])) {printf("dn0 is %f i is %f iter: %d\n", dn0[i],(i)*dz,iter);
+	// printf("n0: %f n1: %f n2: %f n3: %f n2v %f n1v: %f \n",n0[i],n1[i],n2[i],n3[i],n2v[i],n1v[i]);
+	 //{{{ Write out diagnostics
+#ifdef DIAG
+if(iter==3)  {
+for(i=0;i<N;i++)  fprintf(fpwdens,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",(i-NiW)*dz,n0[i],n1[i],n2[i],n3[i],n1v[i],n2v[i]);
+for(i=0;i<N;i++)  fprintf(fpfdivs,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,dn0[i],dn1[i],dn2[i],dn3[i],dn1v[i],dn2v[i]);
+for(i=0;i<N;i++)  fprintf(fpdirect,"%f %12.10f %12.10f %12.10f \n",i*dz,c2[i],c3[i],c2v[i]);
+for(i=0;i<N;i++)  fprintf(fpdcf,"%f %12.10f\n",i*dz,dcf[i]);
+for(i=0;i<N;i++)  fprintf(fprho,"%f %12.10f\n",i*dz,rho[i]);
+for(i=0;i<N;i++)  fprintf(fprhonew,"%f %12.10f %12.10f %12.10f\n",i*dz,rhonew[i],alpha*exp(invT*(mu-Vext[i])+dcf[i]),exp(invT*(mu-Vext[i])));
+exit(0);}
+//exit(0);  //Stops after first iteration to keep file sizes small. Remove this line to get data on all iterations
+#endif //}}}
+	// exit(0);}
+if(isnan(dn1[i])) {printf("dn1 is %f i is %f\n", dn1[i],(i)*dz);printf("n0: %f n1: %f n2: %f n3: %f n2v %f n1v: %f \n",n0[i],n1[i],n2[i],n3[i],n2v[i],n1v[i]);
+	 exit(0);}
+if(isnan(dn2[i])) {printf("dn2 is %f i is %f\n", dn2[i],(i)*dz);printf("n0: %f n1: %f n2: %f n3: %f n2v %f n1v: %f \n",n0[i],n1[i],n2[i],n3[i],n2v[i],n1v[i]);
+	 exit(0);}
+
+
 cder1[i]=dn0[i]/Pi4R2 + dn1[i]/Pi4R + dn2[i];   //Combined derivatives
 cder2[i]=dn1v[i]/Pi4R + dn2v[i];
 }
 
 #ifdef SPHERICAL
+//Scalar correlation funcs given by eq (B.11) in supporting documentation
+rs_convl(cder1,w2,c2,NiR,2);
+rs_convl(dn3,w3,c3,NiR,2);
+rs_convl(cder2,w3,c2v,NiR,3);
+rs_convl(cder2,w2v,c2v_dummy,NiR,2);
+for(i=NiR;i<N;i++) {
+	c2[i]*=i; c3[i]*=i;
+	c2v[i]-=c2v_dummy[i];
+	//c2v[i]*=PI*i*dz*dz;
+	
+} 
 
-rs_convl(cder1,w2,c2,NiR,3);
-rs_convl(dn3,w3,c3,NiR,3);
-rs_convl(cder2,w3,c2v,NiR,4);
-rs_convl(cder2,w2vn,c2vdummy,NiR,3);
-for(i=0;i<N;i++) c2v[i]+=c2vdummy[i];
 
 #else
-
 rs_convl(cder1,w2,c2,NiR,0);
-rs_convl(dn3,w3,c3,NiR,0);
 rs_convl(cder2,w2vn,c2v,NiR,0);
-
+rs_convl(dn3,w3,c3,NiR,0);
 #endif
-
-for(i=0;i<N;i++) dcf[i] = -( c2[i] + c2v[i] + c3[i] ); 
+for(i=0;i<N;i++) dcf[i] = -( c2[i] + c2v[i] + c3[i] );
 
 #ifdef LJ
 //Form the attractive contribution via a convolution (see notes file)
@@ -336,19 +363,21 @@ if(dev<TOL) converged = 1;
 if(iter%50==0) {printf("Iteration %5i Deviation= %10.8lg\n",iter++,dev);write_rho();}
 
 //{{{ Write out diagnostics
-#ifdef DIAG
-for(i=0;i<N;i++)  fprintf(fpwdens,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,n0[i],n1[i],n2[i],n3[i],n1v[i],n2v[i]);
+/*#ifdef DIAG
+printf("WHY DIDNT I MAKE IT TO ITER %d\n",iter);
+for(i=0;i<N;i++)  fprintf(fpwdens,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",(i-NiW)*dz,n0[i],n1[i],n2[i],n3[i],n1v[i],n2v[i]);
 for(i=0;i<N;i++)  fprintf(fpfdivs,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,dn0[i],dn1[i],dn2[i],dn3[i],dn1v[i],dn2v[i]);
-for(i=0;i<N;i++)  fprintf(fpdirect,"%f %12.10f %12.10f %12.10f %12.10f %12.10f %12.10f\n",i*dz,/*c0[i],c1[i],*/c2[i],c3[i],/*c1v[i],*/c2v[i]);
+for(i=0;i<N;i++)  fprintf(fpdirect,"%f %12.10f %12.10f %12.10f \n",i*dz,c2[i],c3[i],c2v[i]);
 for(i=0;i<N;i++)  fprintf(fpdcf,"%f %12.10f\n",i*dz,dcf[i]);
 for(i=0;i<N;i++)  fprintf(fprho,"%f %12.10f\n",i*dz,rho[i]);
 for(i=0;i<N;i++)  fprintf(fprhonew,"%f %12.10f %12.10f %12.10f\n",i*dz,rhonew[i],alpha*exp(invT*(mu-Vext[i])+dcf[i]),exp(invT*(mu-Vext[i])));
-if(iter==40) exit(0);  //Stops after first iteration to keep file sizes small. Remove this line to get data on all iterations
-#endif //}}}
+//exit(0);  //Stops after first iteration to keep file sizes small. Remove this line to get data on all iterations
+#endif //}}}*/
 
 // Copy the new density profile to the old one.
 
 for(i=0;i<iend;i++) rho[i]=rhonew[i];  // Note we fix the 'bulk' density far from the wall
+
 
 } //end of iteration loop
 
@@ -356,60 +385,62 @@ if(converged==1) printf("\nConverged to within tolerance in %i iterations\n",ite
 else printf("Failed to converge after %i iterations\n",MAXITER);
 
 fprintf(fpout,"--------------------------------------------------------------- \n\n");
+#ifdef CONTACT_RULE
+if(isweep==0) {
+	//old_gamma = omega(1)/(PI_4*(NiW)*(NiW)*dz*dz);
+	old_gamma = omega(1)/(PI_4*(NiW-NiR)*(NiW-NiR)*dz*dz);
+	printf("old_gamma is %f, isweep is %d\n",old_gamma,isweep);
+}
+else {
+	//new_gamma = omega(1)/(PI_4*(NiW)*(NiW)*dz*dz);
+	new_gamma = omega(1)/(PI_4*(NiW-NiR)*(NiW-NiR)*dz*dz);
+	printf("new_gamma is %f, isweep is %d\n",new_gamma,isweep);
+}
+}
+#endif
+
 #ifdef MUDIFF
 if(isweep==0) {
 	old_gamma = omega(1);
+	#ifdef SPHERICAL
+	old_gamma/=(PI_4*(NiW)*(NiW)*dz*dz);
+	#endif
 	printf("gamma_1= %12.10f\n",old_gamma);
 }
 else 
 {
 	new_gamma = omega(1);
+	#ifdef SPHERICAL
+	new_gamma/=(PI_4*(NiW)*(NiW)*dz*dz);
+	#endif
     printf("gamma_2= %12.10f\n",new_gamma);
 }
 }
+printf("Wall is %d\n",NiW);
 printf("-d(gamma)/dmu= %f\nadsorption= %f\n",-(new_gamma-old_gamma)/dmu,adsorption());
 fprintf(fpout,"      z         rho(z)     rho(z)/rhob         eta(z)         Chi(z)\n\n");
 for(i=0;i<iend;i++) {z=(i-NiW)*dz;  fprintf(fpout,"A  %f  %12.10f  %12.10f  %12.10f  %12.10f\n",z,rhokeep[i],rhokeep[i]/rhob,rhokeep[i]*PI/6,(rho[i]-rhokeep[i])/dmu);}
 #else
-fprintf(fpout,"       z        rho(z)      rho(z)/rhob      eta(z)         d[z]         Phi(z) \n\n");
-#ifdef SPHERICAL
-printf("iend is %d:\n", iend);
-if(isweep_sphere>0) {
-for(i=0;i<iend;i++) {z=(i-NiW_keep)*dz; fprintf(fpout,"B  %f  %12.10lg  %12.10lg  %12.10lg  %12.10lg  %12.10lg\n",z,rhokeep[i],rhokeep[i]/rhob,rhokeep[i]*PI/6,d[i],phi[i]+phiid[i]);}
-}
+#ifdef CONTACT_RULE
+//cont_rule = p + 2.0*(old_gamma)/((NiW_keep)*dz) + (new_gamma-old_gamma)/dR;
+cont_rule = p + 2.0*(old_gamma)/((NiW_keep-NiR)*dz) + (new_gamma-old_gamma)/dR;
+//printf("Hard Wall k_BT*contact density = %f, sum_rule = %f\n",T*rhokeep[NiW_keep],cont_rule);
+printf("Hard Wall k_BT*contact density = %f, sum_rule = %f\n",T*rhokeep[NiW_keep]*(NiW_keep*NiW_keep)/((NiW_keep-NiR)*(NiW_keep-NiR)),cont_rule);
+printf("Individual components: p = %f 2gamma/R = %f dgamma/dR %f\n",p, 2.0*(old_gamma)/((NiW_keep-NiR)*dz), (new_gamma-old_gamma)/dR);
+printf("Rho keep was %f\n",rhokeep[NiW_keep]);
 #else
 omega(1);
-for(i=0;i<iend;i++) {z=(i-NiW)*dz; fprintf(fpout,"B  %f  %12.10lg  %12.10lg  %12.10lg  %12.10lg  %12.10lg\n",z,rho[i],rho[i]/rhob,rho[i]*PI/6,d[i],phi[i]+phiid[i]);}
 printf("gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());fprintf(fpout,"gamma= %12.10f\nadsorption= %12.10f\n",omega(1),adsorption());
 #endif
+fprintf(fpout,"       z        rho(z)      rho(z)/rhob      eta(z)         d[z]         Phi(z) \n\n");
+for(i=0;i<iend;i++) {z=(i-NiW)*dz; fprintf(fpout,"B  %f  %12.10lg  %12.10lg  %12.10lg  %12.10lg  %12.10lg\n",z,rho[i],rho[i]/rhob,rho[i]*PI/6,d[i],phi[i]+phiid[i]);}
 #endif
 
 
 #ifdef LR
 printf("Sum rule pressure: %10.8lg (%10.8lg)\n",sumrule(),p);fprintf(fpout,"Sum rule pressure: %10.8lg (%10.8lg)\n",sumrule(),p);
 #else
-#ifdef SPHERICAL
-if(isweep_sphere==0) {
-	old_gamma = omega(1);
-	printf("Old gamma: %f\n", old_gamma); old_gamma/=(PI_4*(NiW)*dz*(NiW)*dz); printf("Old gamma: %f NiW: %d\n", old_gamma, NiW);}
-
-else if (isweep_sphere>0) {
-	new_gamma = omega(1);
-	new_gamma/=(PI_4*(NiW)*dz*(NiW)*dz); 
-	printf("New gamma: %f for wall %d\n", new_gamma, NiW);
-	}
-}
-
-cont = p + (2.0*new_gamma/((NiW)*dz)) + ((new_gamma-old_gamma)/dR);
-printf("Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n p+2gamma/R + dgamma/dr = %f\n",T*rho[NiW],fabs(T*rho[NiW]-p), cont);
-printf("p: %f 2gamma/R: %f dgamma/dR: %f\n", p, 2.0*new_gamma/((NiW)*dz), (new_gamma-old_gamma)/dR);
-fprintf(fpout,"Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n p+2gamma/R + dgamma/dr = %f\n",T*rho[NiW],fabs(T*rho[NiW]-p),p + 2.0*new_gamma/(NiW*dz) + (new_gamma-old_gamma)/dR);
-#ifdef MUDIFF
-}
-#endif
-#else
 printf("Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n",T*rho[NiW],fabs(T*rho[NiW]-p));fprintf(fpout,"Hard wall k_BT*Contact density = %f (deviation = %10.8f)\n",T*rho[NiW],fabs(T*rho[NiW]-p));
-#endif
 #endif
   	
 write_rho(); //This is written out to rholive incase we want to restart from the same profile
@@ -444,7 +475,7 @@ if(zwall>0)
      if(Vext[i]>BARRIER) Vext[i]=BARRIER;
 }
 #endif
-}
+    }
     
 #ifdef DIAG 
   for(i=0;i<N;i++)  fprintf(fpVext," %f %f\n",(i-NiW)*dz,Vext[i]);
@@ -495,7 +526,8 @@ double z;
 
 for(i=0;i<=NiR;i++) // The heaviside function is unity when it's argument is zero or greater. 
   {
-       z = i*dz;  	  
+       z = i*dz;
+    	  
 	   w3[i]   =  PI*(R*R-z*z)*dz;      	 	 
 	   w2[i]   =  2*PI*R*dz;              
 	   w2v[i]  =  2*PI*z*dz;            
@@ -556,54 +588,57 @@ fclose(fpwhts);
 	
 //{{{ real space convolution
 void rs_convl(const double *input, const double *response, double *output, int HALFWIDTH, int mode)   // real_space discrete convolution. 
-/* The different modes here refer to the spherical case where multiplications and divisions by r and r' are important. The modes
- * are as follows:
- * 0 = No multiplications or divisions by r, r'. Used for Vext and the Planar Potential.
- * 1 = Multiply by r' and divide by r. Used for spherical weighted densities.
- * 2 = Multiply by r' and divide by r twice. Used for first term in vector weighted densities.
- * 3 = Multiply by r and divide by r'. Used in correlation functions in spherical case.
- * 4 = Multiply by r and divide by r' twice. Used in vector correlation functions. */
+
 {
 	
   int i,j,k;
   int nterms;
   double this,next,term;
   double store[N];
-
+	 
+	 #ifdef SPHERICAL
+  	  for(i=NiR;i<N;i++)
+  	  #else
   	  for(i=0;i<N;i++)
+  	  #endif
   	  {
   	  	  output[i]=0.0;
+
   	  	  for(j=i-HALFWIDTH;j<=i+HALFWIDTH;j++)
+  	 
   	  	  {
-  	  	  	  if(j>=0 && j<N) 
-  	  	  	  {
-				  #ifdef SPHERICAL
-				  if(mode>0 && mode<3) output[i]+= input[j] * response[MOD(i-j, N)] * j * dz;
-				  else if (mode>2) {
-					if(j>0) {
-						output[i]+= (input[j] * response[MOD(i-j, N)])/ (j * dz);
-						if(mode==4) output[i]/=(j*dz);
-					}
-				  }
-				  else output[i] += input[j] * response[MOD(i-j, N)];
-				  #else
-				  output[i]+= input[j] * response[MOD(i-j, N)];
-				  #endif
-			  }
-		  }
-		  
-		  #ifdef SPHERICAL
-		  
-		  if(mode>0 && mode<3) {
-			  if(i>0) {
-			   output[i]/=i*dz;
-			   if(mode==2) output[i]/=i*dz;
-		   }
-		  }
-		  else if (mode>2) output[i]*= i * dz;
-		  
-		  #endif
-  	  }
+			  
+			  switch(mode)
+			  {
+			  case 0:
+			  // The case for the planar geometry
+				if(j>=0 && j<N) output[i]+= (input[j] * response[MOD(i-j,N)]);
+				break;
+				
+			  case 1:
+			  // Case for scalar weighted densities in spherical geometry
+			    if(j>0 && j<N) output[i]+= (input[j] * response[MOD(i-j,N)] * j);
+				break;
+			
+			  case 2:
+			  // Case for spherical correlation functions.
+			    if(j>0 && j<N) output[i]+= ((input[j] * response[MOD(i-j,N)])/j);
+			    break;
+			   
+			  case 3:
+			  // Case for spherical correlation functions with vector densities
+			    if(j>0 && j<N) output[i]+= ((input[j] * response[MOD(i-j,N)])/( j * j * dz));
+			  // if(j>0 && j<N) output[i]+= input[j] * (1.0/(j*j)) * (NiR*NiR + j*j - i*i);
+			   break;
+			  
+			  case 4:
+			  //Case for spherical weighted densities when using just integrals
+			  if(j>0 && j<N) output[i] += input[j] * j * (1.0/(i*i)) * (NiR*NiR + i*i - j*j);
+		     }
+  	  	  }
+
+  }
+ 
   	  
  
 } //}}}
@@ -771,11 +806,15 @@ return(sum);
 
 double omega(int mode)
  {
-    int i,end;
+    int i,end,r;
     double sumid, sumphi;
 
     for(i=0;i<N;i++) {phi[i]=0; phiid[i]=0.0;}
+    #ifdef SPHERICAL
+    for(i=0;i<N-2*NiR;i++) 
+    #else
     for(i=0;i<N-2*NiR;i++)
+    #endif
        {
          phi[i] = -n0[i]*log( 1-n3[i] ) + ( n1[i]*n2[i]-n1v[i]*n2v[i] ) / ( 1-n3[i] );
 #ifdef WHITEBEAR
@@ -789,21 +828,25 @@ double omega(int mode)
 #ifdef LJ
          phi[i] += 0.5*rho[i]*cphiatt[i];  
 #endif
-
-		phi[i] += mode*p; 
-     
-        if(i>=(NiW) && rho[i]>0) phiid[i] = T*rho[i]*(log(rho[i])-1.0) + rho[i]*(Vext[i]-mu);  //Due to convolution phi has contributions over a larger range than the ideal part
-       
 #ifdef SPHERICAL
-        if(i>NiW) {phi[i]*=PI_4*(i-1)*dz*(i-1)*dz; phiid[i]*=PI_4*(i-1)*(i-1)*dz*dz;} //Due to definition of integration here, must multiply by area of circle.
-#endif
+		 if(i>=NiW-NiR) phi[i] += mode*p;
+#else
+         phi[i] += mode*p;   
+#endif    
+         if(rho[i]>0) phiid[i] = T*rho[i]*(log(rho[i])-1.0) + rho[i]*(Vext[i]-mu);  //Due to convolution phi has contributions over a larger range than the ideal part
+       #ifdef SPHERICAL
+       //r=(i-NiW+NiR)*dz; r*=r*PI_4;
+       r=i*i*PI_4*dz*dz;
+       phiid[i]*=r; phi[i]*=r;
+       #endif
        }
 	
     sumid=0.0;sumphi=0.0;
     for (i=0;i<iend-1;i++) sumphi+=phi[i]+phi[i+1];        
     for (i=0;i<iend-1;i++) sumid+=phiid[i]+phiid[i+1];
-     
-	return dz*(sumid+sumphi)/2.0;
+    
+  return dz*(sumid+sumphi)/2.0;
+
  }
 //}}}
 
@@ -814,9 +857,14 @@ double adsorption()
 int i,end;
 double a=0.0;
 
+#ifdef SPHERICAL
+for(i=NiW-NiR;i<iend;i++) a+=i*i*(rho[i]-rhob);
+a*=(PI_4*dz*dz*dz);
+return a;
+#else
 for (i=0;i<iend;i++) a+=rho[i]+rho[i+1]-2*rhob;
-
 return (dz*a/2.);
+#endif
 } //}}}
 
 //{{{ update
@@ -838,7 +886,7 @@ for(i=0;i<iend;i++)
 #else
    g[i] = exp(invT*(mu-Vext[i])+dcf[i]);
 #endif
- 
+  
   d[i]   = g[i] - rho[i];
   dev += fabs(d[i]);
   if(iter==0) { g2[i]=g[i]; d2[i]=d[i];}
