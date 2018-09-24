@@ -81,7 +81,7 @@ double Pi4R2,Pi4R;
 int iter=1, isweep, iend;
 int NiR=R/dz;           // Number of grid points within particle radius
 #ifdef SPHERICAL
-int NiW = 4*R/dz;
+int NiW = 50*R/dz;
 #else
 int NiW=R/dz;           // Number of grid points within wall
 #endif
